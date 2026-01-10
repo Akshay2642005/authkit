@@ -3,6 +3,10 @@ name = "authkit"
 version = "0.1.0"
 edition = "2024"
 
+liscense = "MIT"
+authors = ["Akshay B <akshay2642005@gmail.com>"]
+description = "A Rust authentication library supporting multiple hashing algorithms and databases."
+
 [lib]
 name = "authkit"
 path = "src/lib.rs"
