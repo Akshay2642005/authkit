@@ -1,7 +1,7 @@
 use crate::auth::{Auth, AuthInner};
 use crate::error::{AuthError, Result};
-use crate::strategies::password::{PasswordStrategy, PasswordStrategyType};
-use crate::strategies::session::{SessionStrategy, SessionStrategyType};
+use crate::strategies::password::PasswordStrategyType;
+use crate::strategies::session::SessionStrategyType;
 use crate::types::Database;
 use std::sync::Arc;
 

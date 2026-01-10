@@ -6,7 +6,7 @@ use crate::strategies::session::SessionStrategy;
 use crate::types::{Session, User};
 use std::sync::Arc;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Auth {
 	pub(crate) inner: Arc<AuthInner>,
 }
@@ -15,6 +15,12 @@ pub(crate) struct AuthInner {
 	pub(crate) db: Box<dyn DatabaseTrait>,
 	pub(crate) password_strategy: Box<dyn PasswordStrategy>,
 	pub(crate) session_strategy: Box<dyn SessionStrategy>,
+}
+
+impl std::fmt::Debug for AuthInner {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		f.debug_struct("AuthInner").finish_non_exhaustive()
+	}
 }
 
 impl Auth {

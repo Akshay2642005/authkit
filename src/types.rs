@@ -35,10 +35,6 @@ impl Database {
 			inner: DatabaseInner::Postgres(inner),
 		})
 	}
-
-	pub async fn migrate(&self) -> crate::Result<()> {
-		self.inner.migrate().await
-	}
 }
 pub(crate) enum DatabaseInner {
 	#[cfg(feature = "sqlite")]
