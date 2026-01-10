@@ -26,6 +26,9 @@ pub enum AuthError {
 	#[error("Missing required configuration: Database")]
 	MissingDatabase,
 
+	#[error("Missing required configuration: Password strategy")]
+	MissingPasswordStrategy,
+
 	#[error("Password hasing error: {0}")]
 	PasswordHashingError(String),
 

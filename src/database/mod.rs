@@ -44,3 +44,11 @@ pub(crate) fn create_database_trait(inner: DatabaseInner) -> Box<dyn DatabaseTra
 		DatabaseInner::Postgres(db) => Box::new(db),
 	}
 }
+
+// Compile-time check: at least one database backend must be enabled
+#[cfg(not(any(feature = "sqlite", feature = "postgres")))]
+compile_error!(
+	"AuthKit requires at least one database backend. \
+	 Enable one of: 'sqlite', 'postgres'. \
+	 Example: cargo build --features sqlite"
+);

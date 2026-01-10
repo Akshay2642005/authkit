@@ -34,9 +34,16 @@ impl AuthBuilder {
 	pub fn build(self) -> Result<Auth> {
 		let database = self.database.ok_or(AuthError::MissingDatabase)?;
 
+		#[cfg(feature = "argon2")]
 		let password_strategy = self
 			.password_strategy
 			.unwrap_or_default()
+			.create_strategy()?;
+
+		#[cfg(not(feature = "argon2"))]
+		let password_strategy = self
+			.password_strategy
+			.ok_or(AuthError::MissingPasswordStrategy)?
 			.create_strategy()?;
 
 		let session_strategy = self.session_strategy.unwrap_or_default().create_strategy();

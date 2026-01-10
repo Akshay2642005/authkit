@@ -17,10 +17,11 @@ pub(crate) trait PasswordStrategy: Send + Sync {
 }
 
 /// Public enum for selecting password strategy
-#[derive(Debug, Clone, Copy, Default)]
+#[derive(Debug, Clone, Copy)]
+#[cfg_attr(feature = "argon2", derive(Default))]
 pub enum PasswordStrategyType {
 	#[cfg(feature = "argon2")]
-	#[default]
+	#[cfg_attr(feature = "argon2", default)]
 	Argon2,
 }
 
@@ -32,3 +33,11 @@ impl PasswordStrategyType {
 		}
 	}
 }
+
+// Compile-time check: at least one password strategy must be enabled
+#[cfg(not(any(feature = "argon2", feature = "bcrypt")))]
+compile_error!(
+	"AuthKit requires at least one password strategy. \
+	 Enable one of: 'argon2' (recommended), 'bcrypt'. \
+	 Example: cargo build --features argon2"
+);
