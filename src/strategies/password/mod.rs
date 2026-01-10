@@ -17,12 +17,69 @@ pub(crate) trait PasswordStrategy: Send + Sync {
 }
 
 /// Public enum for selecting password strategy
+///
+/// **At least one password strategy feature must be enabled.**
+///
+/// Available strategies:
+/// - `argon2` (recommended, enabled by default) - Argon2id password hashing
+/// - `bcrypt` (not yet implemented) - bcrypt password hashing
+///
+/// # Examples
+///
+/// ```ignore
+/// use authkit::Auth;
+/// use authkit::strategies::password::PasswordStrategyType;
+///
+/// // Using default (argon2)
+/// let auth = Auth::builder()
+///     .database(db)
+///     .build()?;
+///
+/// // Explicitly selecting argon2
+/// let auth = Auth::builder()
+///     .database(db)
+///     .password_strategy(PasswordStrategyType::Argon2)
+///     .build()?;
+/// ```
 #[derive(Debug, Clone, Copy)]
-#[cfg_attr(feature = "argon2", derive(Default))]
 pub enum PasswordStrategyType {
 	#[cfg(feature = "argon2")]
-	#[cfg_attr(feature = "argon2", default)]
 	Argon2,
+	#[cfg(feature = "bcrypt")]
+	Bcrypt,
+}
+
+// Compile-time check: at least one password strategy must be enabled
+// This will fail compilation if neither argon2 nor bcrypt features are enabled
+#[cfg(not(any(feature = "argon2", feature = "bcrypt")))]
+compile_error!(
+	"AuthKit requires at least one password hashing strategy feature to be enabled.\n\
+	 \n\
+	 Available strategies:\n\
+	 - 'argon2' (recommended, secure default)\n\
+	 - 'bcrypt' (not yet implemented)\n\
+	 \n\
+	 Add one to your Cargo.toml:\n\
+	 \n\
+	 [dependencies]\n\
+	 authkit = { version = \"0.1\", features = [\"argon2\", \"sqlite\"] }\n\
+	 \n\
+	 Or use the defaults which include argon2:\n\
+	 \n\
+	 [dependencies]\n\
+	 authkit = \"0.1\""
+);
+
+impl Default for PasswordStrategyType {
+	fn default() -> Self {
+		// Prioritize argon2 (recommended)
+		#[cfg(feature = "argon2")]
+		return Self::Argon2;
+
+		// Fall back to bcrypt if argon2 not available
+		#[cfg(all(not(feature = "argon2"), feature = "bcrypt"))]
+		return Self::Bcrypt;
+	}
 }
 
 impl PasswordStrategyType {
@@ -30,14 +87,13 @@ impl PasswordStrategyType {
 		match self {
 			#[cfg(feature = "argon2")]
 			Self::Argon2 => Ok(Box::new(argon2_strategy::Argon2Strategy::default())),
+			#[cfg(feature = "bcrypt")]
+			Self::Bcrypt => {
+				// bcrypt strategy not yet implemented
+				Err(crate::error::AuthError::InternalError(
+					"bcrypt password strategy is not yet implemented".to_string(),
+				))
+			}
 		}
 	}
 }
-
-// Compile-time check: at least one password strategy must be enabled
-#[cfg(not(any(feature = "argon2", feature = "bcrypt")))]
-compile_error!(
-	"AuthKit requires at least one password strategy. \
-	 Enable one of: 'argon2' (recommended), 'bcrypt'. \
-	 Example: cargo build --features argon2"
-);

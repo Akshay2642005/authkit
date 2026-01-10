@@ -66,8 +66,8 @@ jobs:
       - name: Run tests (default features)
         run: cargo nextest run --workspace --all-targets
 
-      - name: Run tests (no default features)
-        run: cargo nextest run --workspace --all-targets --no-default-features
+      - name: Run tests (minimal features)
+        run: cargo nextest run --workspace --all-targets --no-default-features --features sqlite,argon2
 
       - name: Run doc tests
         run: cargo test --doc --all-features
@@ -134,8 +134,8 @@ jobs:
       - name: Build (all features)
         run: cargo build --all-features
 
-      - name: Build (no default features)
-        run: cargo build --no-default-features
+      - name: Build (minimal features)
+        run: cargo build --no-default-features --features sqlite,argon2
 
       - name: Build (release)
         run: cargo build --release --all-features

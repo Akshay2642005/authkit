@@ -48,7 +48,19 @@ pub(crate) fn create_database_trait(inner: DatabaseInner) -> Box<dyn DatabaseTra
 // Compile-time check: at least one database backend must be enabled
 #[cfg(not(any(feature = "sqlite", feature = "postgres")))]
 compile_error!(
-	"AuthKit requires at least one database backend. \
-	 Enable one of: 'sqlite', 'postgres'. \
-	 Example: cargo build --features sqlite"
+	"AuthKit requires at least one database backend feature to be enabled.\n\
+	 \n\
+	 Available backends:\n\
+	 - 'sqlite' (enabled by default)\n\
+	 - 'postgres'\n\
+	 \n\
+	 Add one to your Cargo.toml:\n\
+	 \n\
+	 [dependencies]\n\
+	 authkit = { version = \"0.1\", features = [\"sqlite\", \"argon2\"] }\n\
+	 \n\
+	 Or use the defaults which include sqlite:\n\
+	 \n\
+	 [dependencies]\n\
+	 authkit = \"0.1\""
 );
