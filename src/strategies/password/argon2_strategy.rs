@@ -8,17 +8,9 @@ use argon2::{
 use async_trait::async_trait;
 
 /// Argon2id password hashing strategy
+#[derive(Default)]
 pub(crate) struct Argon2Strategy {
 	argon2: Argon2<'static>,
-}
-
-impl Default for Argon2Strategy {
-	fn default() -> Self {
-		// Use recommended defaults
-		Self {
-			argon2: Argon2::default(),
-		}
-	}
 }
 
 #[async_trait]

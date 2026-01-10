@@ -7,8 +7,8 @@
 //! - Security concerns
 
 use crate::error::AuthError;
-use crate::tests::integration_tests::setup_test_auth;
 use crate::prelude::*;
+use crate::tests::integration_tests::setup_test_auth;
 
 #[tokio::test]
 async fn test_builder_missing_database() {
@@ -334,10 +334,10 @@ async fn test_password_with_null_bytes() {
 async fn test_unicode_in_password() {
 	let auth = setup_test_auth().await.unwrap();
 
-	let passwords = vec![
+	let passwords = [
 		"Pässw0rd",       // German umlaut
 		"P@ssw0rd™",      // Trademark symbol
-		"パスワード123A",     // Japanese + ASCII
+		"パスワード123A", // Japanese + ASCII
 		"Contraseña1",    // Spanish ñ
 	];
 
@@ -358,7 +358,11 @@ async fn test_unicode_in_password() {
 					password: password.to_string(),
 				})
 				.await;
-			assert!(login_result.is_ok(), "Login failed for password: {}", password);
+			assert!(
+				login_result.is_ok(),
+				"Login failed for password: {}",
+				password
+			);
 		}
 	}
 }

@@ -17,23 +17,11 @@ pub(crate) trait PasswordStrategy: Send + Sync {
 }
 
 /// Public enum for selecting password strategy
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Default)]
 pub enum PasswordStrategyType {
 	#[cfg(feature = "argon2")]
+	#[default]
 	Argon2,
-}
-
-impl Default for PasswordStrategyType {
-	fn default() -> Self {
-		#[cfg(feature = "argon2")]
-		{
-			Self::Argon2
-		}
-		#[cfg(not(feature = "argon2"))]
-		{
-			compile_error!("At least one password hashing strategy must be enabled")
-		}
-	}
 }
 
 impl PasswordStrategyType {

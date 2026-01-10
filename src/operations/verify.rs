@@ -25,7 +25,7 @@ pub(crate) async fn execute(auth: &Auth, request: Verify) -> Result<User> {
 	let session = auth
 		.inner
 		.session_strategy
-		.find_session(&auth.inner.db, &request.token)
+		.find_session(auth.inner.db.as_ref(), &request.token)
 		.await?
 		.ok_or(AuthError::InvalidSession)?;
 

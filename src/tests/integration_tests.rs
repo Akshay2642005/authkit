@@ -10,18 +10,41 @@
 use crate::prelude::*;
 use crate::types::Database;
 
-/// Helper function to set up a test Auth instance with SQLite in-memory database
+/// Helper function to set up a test Auth instance with in-memory database
+/// Uses SQLite by default, or Postgres if only postgres feature is enabled
 pub(crate) async fn setup_test_auth() -> Result<Auth> {
-	// Use a unique in-memory database for each test
-	let db_name = format!(":memory:");
-	let db = Database::sqlite(&db_name).await?;
+	#[cfg(all(
+		feature = "sqlite",
+		not(all(feature = "postgres", not(feature = "sqlite")))
+	))]
+	{
+		// Use SQLite in-memory database
+		let db_name = ":memory:".to_string();
+		let db = Database::sqlite(&db_name).await?;
 
-	let auth = Auth::builder().database(db).build()?;
+		let auth = Auth::builder().database(db).build()?;
 
-	// Run migrations
-	auth.migrate().await?;
+		// Run migrations
+		auth.migrate().await?;
 
-	Ok(auth)
+		Ok(auth)
+	}
+
+	#[cfg(all(feature = "postgres", not(feature = "sqlite")))]
+	{
+		// Use Postgres test database
+		// This requires a running Postgres instance with test database
+		let db_url = std::env::var("DATABASE_URL")
+			.unwrap_or_else(|_| "postgres://postgres:postgres@localhost/authkit_test".to_string());
+		let db = Database::postgres(&db_url).await?;
+
+		let auth = Auth::builder().database(db).build()?;
+
+		// Run migrations
+		auth.migrate().await?;
+
+		Ok(auth)
+	}
 }
 
 #[tokio::test]

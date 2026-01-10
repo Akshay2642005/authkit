@@ -13,7 +13,7 @@ default = ["sqlite","argon2"]
 sqlite = ["sqlx/sqlite", "sqlx/runtime-tokio"]
 postgres = ["sqlx/postgres", "sqlx/runtime-tokio"]
 
-argon2 = ["dep:argon2"]
+argon2 = ["dep:argon2", "dep:password-hash"]
 bcrypt = ["dep:bcrypt"]
 jwt = ["dep:jsonwebtoken"]
 
@@ -22,11 +22,12 @@ tokio = { version = "1.28", features = ["full"] }
 async-trait = "0.1"
 sqlx = { version = "0.8", features = ["runtime-tokio"], default-features = false }
 argon2 = {version = "0.5", optional = true }
-bcrypt = {version = "0.15", optional = true }
-jsonwebtoken = {version = "9", optional = true }
-rand = "0.8"
+password-hash = { version = "0.5", optional = true, features = ["getrandom"] }
+bcrypt = {version = "0.17.1", optional = true }
+jsonwebtoken = {version = "9", optional = true, features = ["use_pem"] }
+rand = "0.9.2"
 subtle = "2.5"
 serde = {version = "1.0", features = ["derive"] }
-thiserror = "1.0"
+thiserror = "2.0.17"
 regex = "1.10"
 hex = "0.4"

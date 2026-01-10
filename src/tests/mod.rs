@@ -7,6 +7,11 @@
 //! - Session management
 //! - Security features
 
+// Only compile tests when at least one database feature is enabled
+#[cfg(any(feature = "sqlite", feature = "postgres"))]
 mod error_tests;
+
+#[cfg(any(feature = "sqlite", feature = "postgres"))]
 mod integration_tests;
+
 mod validation_tests;

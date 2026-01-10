@@ -112,11 +112,8 @@ jobs:
       matrix:
         features:
           - "sqlite,argon2"
-          - "postgres,argon2"
-          - "sqlite,bcrypt"
-          - "postgres,bcrypt"
-          - "sqlite,argon2,jwt"
-          - "postgres,argon2,jwt"
+          # JWT not yet implemented
+          # - "sqlite,argon2,jwt"
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable

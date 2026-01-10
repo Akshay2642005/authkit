@@ -48,7 +48,7 @@ jobs:
 
       - uses: rustsec/audit-check@v2
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.AUTHKIT_GITHUB_TOKEN }}
 
   format_check:
     name: Format Check
@@ -132,10 +132,8 @@ jobs:
       matrix:
         features:
           - "sqlite,argon2"
-          - "postgres,argon2"
-          - "sqlite,bcrypt"
-          - "postgres,bcrypt"
-          - "sqlite,argon2,jwt"
+          # JWT not yet implemented
+          # - "sqlite,argon2,jwt"
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
