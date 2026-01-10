@@ -1,40 +1,104 @@
+name: Publish
+
 on:
   push:
     tags:
-      - "*"
+      - "v*.*.*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to publish (e.g., v0.1.0)"
+        required: true
+        type: string
 
-name: Publish
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
 
 jobs:
+  verify_tag:
+    name: Verify Tag
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      version: ${{ steps.get_version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Get version from tag
+        id: get_version
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            VERSION="${{ github.event.inputs.version }}"
+          else
+            VERSION=${GITHUB_REF#refs/tags/}
+          fi
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+          echo "Publishing version: ${VERSION}"
+
   audit:
-    name: Audit
+    name: Security Audit
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
-        # Needed for audit-check@v2
-      - name: generate Cargo.lock
+
+      - name: Generate Cargo.lock
         run: cargo generate-lockfile
+
       - uses: rustsec/audit-check@v2
         with:
-          token: ${{ secrets.AUTHKIT_TGITHUB_TOKEN }}
+          token: ${{ secrets.GITHUB_TOKEN }}
 
-  build_and_test_linux:
-    name: Build and Test (Linux)
+  format_check:
+    name: Format Check
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+
+  clippy_check:
+    name: Clippy Check
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+
+      - name: Run Clippy
+        run: cargo clippy --all-targets --all-features -- -D warnings
+
+  test_linux:
+    name: Test Suite (Linux)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
 
       - uses: taiki-e/install-action@nextest
-      - name: "Build and test"
+
+      - name: Run tests (all features)
         run: cargo nextest run --workspace --all-targets --all-features
 
-  build_and_test_windows:
-    name: Build and Test (Windows)
+      - name: Run tests (default features)
+        run: cargo nextest run --workspace --all-targets
+
+      - name: Run doc tests
+        run: cargo test --doc --all-features
+
+  test_windows:
+    name: Test Suite (Windows)
     runs-on: windows-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
       - name: Prepare symlink configuration
         run: git config --global core.symlinks true
@@ -43,50 +107,183 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
 
       - uses: taiki-e/install-action@nextest
-      - name: "Build and test"
+
+      - name: Run tests (all features)
         run: cargo nextest run --workspace --all-targets --all-features
 
-  crates_io_publish:
-    name: Publish (crates.io)
-    needs:
-      - audit
-      - build_and_test_linux
-      - build_and_test_windows
+  test_macos:
+    name: Test Suite (macOS)
+    runs-on: macos-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
 
+      - uses: taiki-e/install-action@nextest
+
+      - name: Run tests (all features)
+        run: cargo nextest run --workspace --all-targets --all-features
+
+  test_feature_combinations:
+    name: Feature Combinations
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      matrix:
+        features:
+          - "sqlite,argon2"
+          - "postgres,argon2"
+          - "sqlite,bcrypt"
+          - "postgres,bcrypt"
+          - "sqlite,argon2,jwt"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: taiki-e/install-action@nextest
+
+      - name: Test features - ${{ matrix.features }}
+        run: cargo nextest run --workspace --all-targets --no-default-features --features "${{ matrix.features }}"
+
+  build_check:
+    name: Build Verification
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
 
-      - name: cargo-release cache restore
-        id: cargo_release_cache_restore
-        uses: actions/cache/restore@v4
+      - name: Build release (all features)
+        run: cargo build --release --all-features
+
+      - name: Build release (default features)
+        run: cargo build --release
+
+  documentation:
+    name: Documentation Check
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Check documentation
+        run: cargo doc --all-features --no-deps
+        env:
+          RUSTDOCFLAGS: -D warnings
+
+  dry_run_publish:
+    name: Dry Run Publish
+    needs:
+      - verify_tag
+      - audit
+      - format_check
+      - clippy_check
+      - test_linux
+      - test_windows
+      - test_macos
+      - test_feature_combinations
+      - build_check
+      - documentation
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Dry run publish
+        run: cargo publish --dry-run --all-features
+
+  publish_crates_io:
+    name: Publish to crates.io
+    needs:
+      - verify_tag
+      - audit
+      - format_check
+      - clippy_check
+      - test_linux
+      - test_windows
+      - test_macos
+      - test_feature_combinations
+      - build_check
+      - documentation
+      - dry_run_publish
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Login to crates.io
+        run: cargo login ${{ secrets.CRATES_IO_API_TOKEN }}
+
+      - name: Publish to crates.io
+        run: cargo publish --all-features
+
+  create_github_release:
+    name: Create GitHub Release
+    needs:
+      - verify_tag
+      - publish_crates_io
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
         with:
-          path: ~/.cargo/bin/cargo-release
-          key: ${{ runner.os }}-cargo-release
+          fetch-depth: 0
 
-      - run: cargo install cargo-release
-        if: steps.cargo_release_cache_restore.outputs.cache-hit != 'true'
+      - name: Generate changelog
+        id: changelog
+        run: |
+          VERSION="${{ needs.verify_tag.outputs.version }}"
+          PREV_TAG=$(git describe --tags --abbrev=0 ${VERSION}^ 2>/dev/null || echo "")
 
-      - name: cargo-release cache save
-        id: cargo_release_cache_save
-        uses: actions/cache/save@v4
-        if: always() && steps.cargo_release_cache_restore.outputs.cache-hit != 'true'
+          if [ -z "$PREV_TAG" ]; then
+            CHANGES=$(git log --pretty=format:"- %s" ${VERSION})
+          else
+            CHANGES=$(git log --pretty=format:"- %s" ${PREV_TAG}..${VERSION})
+          fi
+
+          echo "changes<<EOF" >> $GITHUB_OUTPUT
+          echo "$CHANGES" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
         with:
-          path: ~/.cargo/bin/cargo-release
-          key: ${{ runner.os }}-cargo-release
+          tag_name: ${{ needs.verify_tag.outputs.version }}
+          name: Release ${{ needs.verify_tag.outputs.version }}
+          body: |
+            ## AuthKit ${{ needs.verify_tag.outputs.version }}
 
-      - name: cargo login
-        run: |-
-          echo "${{ secrets.CRATES_IO_API_TOKEN }}" | cargo login
+            ### Changes
+            ${{ steps.changelog.outputs.changes }}
 
-      - name: "cargo release publish"
-        run: |-
-          cargo release \
-            publish \
-            --workspace \
-            --all-features \
-            --allow-branch HEAD \
-            --no-confirm \
-            --execute
+            ### Installation
+            ```toml
+            [dependencies]
+            authkit = "${{ needs.verify_tag.outputs.version }}"
+            ```
+
+            ### Documentation
+            - [crates.io](https://crates.io/crates/authkit)
+            - [docs.rs](https://docs.rs/authkit)
+          draft: false
+          prerelease: ${{ contains(needs.verify_tag.outputs.version, 'alpha') || contains(needs.verify_tag.outputs.version, 'beta') || contains(needs.verify_tag.outputs.version, 'rc') }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  publish_success:
+    name: Publish Success
+    needs:
+      - publish_crates_io
+      - create_github_release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Success message
+        run: |
+          echo "🎉 Successfully published AuthKit ${{ needs.verify_tag.outputs.version }}"
+          echo "📦 Package: https://crates.io/crates/authkit"
+          echo "📚 Docs: https://docs.rs/authkit"
