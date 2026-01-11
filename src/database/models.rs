@@ -5,6 +5,8 @@ pub(crate) struct DbUser {
 	pub id: String,
 	pub email: String,
 	pub password_hash: String,
+	pub email_verified: bool,
+	pub email_verified_at: Option<i64>,
 	pub created_at: i64,
 }
 
@@ -21,6 +23,8 @@ impl From<DbUser> for crate::types::User {
 		crate::types::User {
 			id: db_user.id,
 			email: db_user.email,
+			email_verified: db_user.email_verified,
+			email_verified_at: db_user.email_verified_at,
 			created_at: db_user.created_at,
 		}
 	}

@@ -34,7 +34,17 @@ impl DatabaseTrait for PostgresDatabase {
                 id TEXT PRIMARY KEY,
                 email TEXT NOT NULL UNIQUE,
                 password_hash TEXT NOT NULL,
-                created_at BIGINT NOT NULL
+                created_at BIGINT NOT NULL,
+                email_verified BOOLEAN NOT NULL DEFAULT FALSE,
+                email_verified_at BIGINT
+            );
+
+            CREATE TABLE IF NOT EXISTS email_verification_tokens (
+                token TEXT PRIMARY KEY,
+                user_id TEXT NOT NULL,
+                expires_at BIGINT NOT NULL,
+                created_at BIGINT NOT NULL,
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
             );
 
             CREATE TABLE IF NOT EXISTS sessions (
@@ -47,6 +57,8 @@ impl DatabaseTrait for PostgresDatabase {
 
             CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id);
             CREATE INDEX IF NOT EXISTS idx_sessions_expires_at ON sessions(expires_at);
+            CREATE INDEX IF NOT EXISTS idx_email_verification_tokens_user_id ON email_verification_tokens(user_id);
+            CREATE INDEX IF NOT EXISTS idx_email_verification_tokens_expires_at ON email_verification_tokens(expires_at);
             "#,
 		)
 		.execute(&self.pool)

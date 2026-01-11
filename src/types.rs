@@ -6,6 +6,15 @@ pub struct User {
 	pub id: String,
 	pub email: String,
 	pub created_at: i64,
+	pub email_verified: bool,
+	pub email_verified_at: Option<i64>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct VerificationToken {
+	pub token: String,
+	pub email: String,
+	pub expires_at: i64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

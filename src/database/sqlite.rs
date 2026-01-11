@@ -34,7 +34,17 @@ impl DatabaseTrait for SqliteDatabase {
                 id TEXT PRIMARY KEY,
                 email TEXT NOT NULL UNIQUE,
                 password_hash TEXT NOT NULL,
-                created_at INTEGER NOT NULL
+                created_at INTEGER NOT NULL,
+                email_verified BOOLEAN NOT NULL DEFAULT 0,
+                email_verified_at INTEGER
+            );
+
+            CREATE TABLE IF NOT EXISTS email_verification_tokens (
+                token TEXT PRIMARY KEY,
+                user_id TEXT NOT NULL,
+                expires_at INTEGER NOT NULL,
+                created_at INTEGER NOT NULL,
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
             );
 
             CREATE TABLE IF NOT EXISTS sessions (
@@ -47,6 +57,8 @@ impl DatabaseTrait for SqliteDatabase {
 
             CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id);
             CREATE INDEX IF NOT EXISTS idx_sessions_expires_at ON sessions(expires_at);
+            CREATE INDEX IF NOT EXISTS idx_email_verification_tokens_user_id ON email_verification_tokens(user_id);
+            CREATE INDEX IF NOT EXISTS idx_email_verification_tokens_expires_at ON email_verification_tokens(expires_at);
             "#,
 		)
 		.execute(&self.pool)
@@ -69,6 +81,8 @@ impl DatabaseTrait for SqliteDatabase {
 			email: row.get("email"),
 			password_hash: row.get("password_hash"),
 			created_at: row.get("created_at"),
+			email_verified: row.get("email_verified"),
+			email_verified_at: row.get("email_verified_at"),
 		})
 		.fetch_optional(&self.pool)
 		.await?;
@@ -90,6 +104,8 @@ impl DatabaseTrait for SqliteDatabase {
 			email: row.get("email"),
 			password_hash: row.get("password_hash"),
 			created_at: row.get("created_at"),
+			email_verified: row.get("email_verified"),
+			email_verified_at: row.get("email_verified_at"),
 		})
 		.fetch_optional(&self.pool)
 		.await?;
@@ -120,6 +136,8 @@ impl DatabaseTrait for SqliteDatabase {
 		Ok(User {
 			id: id.to_string(),
 			email: email.to_string(),
+			email_verified: false,
+			email_verified_at: None,
 			created_at,
 		})
 	}
