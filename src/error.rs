@@ -37,6 +37,18 @@ pub enum AuthError {
 
 	#[error("Internal error: {0}")]
 	InternalError(String),
+
+	#[error("Invalid Token: {0}")]
+	InvalidToken(String),
+
+	#[error("Token Already Used: {0}")]
+	TokenAlreadyUsed(String),
+
+	#[error("Email Already Verified: {0}")]
+	EmailAlreadyVerified(String),
+
+	#[error("Token Expired: {0}")]
+	TokenExpired(String),
 }
 
 pub type Result<T> = std::result::Result<T, AuthError>;

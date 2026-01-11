@@ -36,7 +36,12 @@ pub(crate) async fn execute(auth: &Auth, request: Login) -> Result<Session> {
 	auth
 		.inner
 		.session_strategy
-		.create_session(auth.inner.db.as_ref(), &token, &user.id, expires_at)
+		.create_session(
+			auth.inner.db.as_ref().as_ref(),
+			&token,
+			&user.id,
+			expires_at,
+		)
 		.await?;
 
 	Ok(Session {

@@ -8,6 +8,7 @@ use sqlx::Row;
 use sqlx::sqlite::{SqliteConnectOptions, SqlitePool, SqlitePoolOptions};
 use std::str::FromStr;
 
+#[derive(Clone)]
 pub struct SqliteDatabase {
 	pool: SqlitePool,
 }

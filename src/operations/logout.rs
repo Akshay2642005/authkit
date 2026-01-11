@@ -24,7 +24,7 @@ pub(crate) async fn execute(auth: &Auth, request: Logout) -> Result<()> {
 	auth
 		.inner
 		.session_strategy
-		.delete_session(auth.inner.db.as_ref(), &request.token)
+		.delete_session(auth.inner.db.as_ref().as_ref(), &request.token)
 		.await?;
 
 	Ok(())

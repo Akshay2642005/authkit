@@ -3,6 +3,7 @@ use crate::error::Result;
 use crate::operations::{Login, Logout, Register, Verify};
 use crate::strategies::password::PasswordStrategy;
 use crate::strategies::session::SessionStrategy;
+use crate::strategies::token::TokenStrategy;
 use crate::types::{Session, User};
 use std::sync::Arc;
 
@@ -12,9 +13,10 @@ pub struct Auth {
 }
 
 pub(crate) struct AuthInner {
-	pub(crate) db: Box<dyn DatabaseTrait>,
+	pub(crate) db: Arc<Box<dyn DatabaseTrait>>,
 	pub(crate) password_strategy: Box<dyn PasswordStrategy>,
 	pub(crate) session_strategy: Box<dyn SessionStrategy>,
+	pub(crate) token_strategy: Box<dyn TokenStrategy>,
 }
 
 impl std::fmt::Debug for AuthInner {

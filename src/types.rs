@@ -45,11 +45,20 @@ impl Database {
 		})
 	}
 }
+#[derive(Clone)]
 pub(crate) enum DatabaseInner {
 	#[cfg(feature = "sqlite")]
 	Sqlite(crate::database::sqlite::SqliteDatabase),
 	#[cfg(feature = "postgres")]
 	Postgres(crate::database::postgres::PostgresDatabase),
+}
+
+impl Clone for Database {
+	fn clone(&self) -> Self {
+		Database {
+			inner: self.inner.clone(),
+		}
+	}
 }
 
 impl fmt::Debug for Database {
