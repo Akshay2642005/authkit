@@ -4,7 +4,8 @@ pub mod logout;
 pub mod register;
 pub mod verify;
 
-pub use email_verification::{ResendEmailVerification, SendEmailVerification, VerifyEmail};
+// Email verification types are not yet publicly exposed
+// pub use email_verification::{ResendEmailVerification, SendEmailVerification, VerifyEmail};
 pub use login::Login;
 pub use logout::Logout;
 pub use register::Register;

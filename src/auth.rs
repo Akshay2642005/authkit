@@ -16,6 +16,7 @@ pub(crate) struct AuthInner {
 	pub(crate) db: Arc<Box<dyn DatabaseTrait>>,
 	pub(crate) password_strategy: Box<dyn PasswordStrategy>,
 	pub(crate) session_strategy: Box<dyn SessionStrategy>,
+	#[allow(dead_code)]
 	pub(crate) token_strategy: Box<dyn TokenStrategy>,
 }
 

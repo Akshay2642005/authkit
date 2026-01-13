@@ -10,6 +10,7 @@ pub struct User {
 	pub email_verified_at: Option<i64>,
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct VerificationToken {
 	pub token: String,

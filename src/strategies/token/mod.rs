@@ -8,16 +8,14 @@ pub enum TokenStrategyType {
 }
 
 impl TokenStrategyType {
-	pub fn create_strategy(
-		self,
-		db: std::sync::Arc<Box<dyn crate::database::DatabaseTrait>>,
-	) -> Box<dyn TokenStrategy> {
+	pub(crate) fn create_strategy(self) -> Box<dyn TokenStrategy> {
 		match self {
-			TokenStrategyType::Database => Box::new(database_strategy::DatabaseTokenStrategy::new(db)),
+			TokenStrategyType::Database => Box::new(database_strategy::DatabaseTokenStrategy),
 		}
 	}
 }
 
+#[allow(dead_code)]
 #[derive(Clone, Debug, PartialEq, Eq, Copy)]
 pub enum TokenType {
 	EmailVerification,
@@ -26,6 +24,7 @@ pub enum TokenType {
 }
 
 impl TokenType {
+	#[allow(dead_code)]
 	pub fn as_str(&self) -> &'static str {
 		match self {
 			TokenType::EmailVerification => "email_verification",
@@ -35,6 +34,7 @@ impl TokenType {
 	}
 }
 
+#[allow(dead_code)]
 #[derive(Clone, Debug)]
 pub struct Token {
 	pub id: String,
@@ -46,6 +46,7 @@ pub struct Token {
 	pub created_at: i64,
 }
 
+#[allow(dead_code)]
 #[derive(Clone, Debug)]
 pub struct VerifiedToken {
 	pub id: String,
@@ -54,15 +55,26 @@ pub struct VerifiedToken {
 }
 
 #[async_trait]
-pub trait TokenStrategy: Send + Sync {
+#[allow(dead_code)]
+pub(crate) trait TokenStrategy: Send + Sync {
 	async fn generate_token(
 		&self,
+		db: &dyn crate::database::DatabaseTrait,
 		user_id: &str,
 		token_type: TokenType,
 		expires_at: i64,
 	) -> Result<Token>;
-	async fn verify_token(&self, token: &str, token_type: TokenType) -> Result<VerifiedToken>;
-	async fn mark_token_as_used(&self, token: &str) -> Result<()>;
-	async fn clean_expired_tokens(&self) -> Result<()>;
+	async fn verify_token(
+		&self,
+		db: &dyn crate::database::DatabaseTrait,
+		token: &str,
+		token_type: TokenType,
+	) -> Result<VerifiedToken>;
+	async fn mark_token_as_used(
+		&self,
+		db: &dyn crate::database::DatabaseTrait,
+		token: &str,
+	) -> Result<()>;
+	async fn clean_expired_tokens(&self, db: &dyn crate::database::DatabaseTrait) -> Result<()>;
 }
 pub mod database_strategy;

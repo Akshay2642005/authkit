@@ -1,6 +1,6 @@
 use crate::database::DatabaseTrait;
 #[cfg(feature = "sqlite")]
-use crate::database::models::{DbSession, DbUser};
+use crate::database::models::{DbSession, DbToken, DbUser};
 use crate::error::Result;
 use crate::types::User;
 use async_trait::async_trait;
@@ -29,6 +29,7 @@ impl SqliteDatabase {
 #[async_trait]
 impl DatabaseTrait for SqliteDatabase {
 	async fn migrate(&self) -> Result<()> {
+		// Users table
 		sqlx::query(
 			r#"
             CREATE TABLE IF NOT EXISTS users (
@@ -38,28 +39,54 @@ impl DatabaseTrait for SqliteDatabase {
                 created_at INTEGER NOT NULL,
                 email_verified BOOLEAN NOT NULL DEFAULT 0,
                 email_verified_at INTEGER
-            );
+            )
+            "#,
+		)
+		.execute(&self.pool)
+		.await?;
 
-            CREATE TABLE IF NOT EXISTS email_verification_tokens (
-                token TEXT PRIMARY KEY,
-                user_id TEXT NOT NULL,
-                expires_at INTEGER NOT NULL,
-                created_at INTEGER NOT NULL,
-                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-            );
-
+		// Sessions table
+		sqlx::query(
+			r#"
             CREATE TABLE IF NOT EXISTS sessions (
                 token TEXT PRIMARY KEY,
                 user_id TEXT NOT NULL,
                 expires_at INTEGER NOT NULL,
                 created_at INTEGER NOT NULL,
                 FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-            );
+            )
+            "#,
+		)
+		.execute(&self.pool)
+		.await?;
 
+		// Tokens table (unified for email verification, password reset, magic links, etc.)
+		sqlx::query(
+			r#"
+            CREATE TABLE IF NOT EXISTS tokens (
+                id TEXT PRIMARY KEY,
+                user_id TEXT NOT NULL,
+                token_hash TEXT NOT NULL UNIQUE,
+                token_type TEXT NOT NULL,
+                expires_at INTEGER NOT NULL,
+                created_at INTEGER NOT NULL,
+                used_at INTEGER,
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+            )
+            "#,
+		)
+		.execute(&self.pool)
+		.await?;
+
+		// Create indexes for better query performance
+		sqlx::query(
+			r#"
             CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id);
             CREATE INDEX IF NOT EXISTS idx_sessions_expires_at ON sessions(expires_at);
-            CREATE INDEX IF NOT EXISTS idx_email_verification_tokens_user_id ON email_verification_tokens(user_id);
-            CREATE INDEX IF NOT EXISTS idx_email_verification_tokens_expires_at ON email_verification_tokens(expires_at);
+            CREATE INDEX IF NOT EXISTS idx_tokens_user_id ON tokens(user_id);
+            CREATE INDEX IF NOT EXISTS idx_tokens_token_hash ON tokens(token_hash);
+            CREATE INDEX IF NOT EXISTS idx_tokens_expires_at ON tokens(expires_at);
+            CREATE INDEX IF NOT EXISTS idx_tokens_type ON tokens(token_type)
             "#,
 		)
 		.execute(&self.pool)
@@ -209,6 +236,111 @@ impl DatabaseTrait for SqliteDatabase {
 		let result = sqlx::query(
 			r#"
             DELETE FROM sessions
+            WHERE expires_at < ?
+            "#,
+		)
+		.bind(now)
+		.execute(&self.pool)
+		.await?;
+
+		Ok(result.rows_affected())
+	}
+
+	// ==========================================
+	// Token Operations
+	// ==========================================
+
+	async fn create_token(
+		&self,
+		id: &str,
+		user_id: &str,
+		token_hash: &str,
+		token_type: &str,
+		expires_at: i64,
+		created_at: i64,
+	) -> Result<()> {
+		sqlx::query(
+			r#"
+            INSERT INTO tokens (id, user_id, token_hash, token_type, expires_at, created_at)
+            VALUES (?, ?, ?, ?, ?, ?)
+            "#,
+		)
+		.bind(id)
+		.bind(user_id)
+		.bind(token_hash)
+		.bind(token_type)
+		.bind(expires_at)
+		.bind(created_at)
+		.execute(&self.pool)
+		.await?;
+
+		Ok(())
+	}
+
+	async fn find_token(&self, token_hash: &str, token_type: &str) -> Result<Option<DbToken>> {
+		let token = sqlx::query(
+			r#"
+            SELECT id, user_id, token_hash, token_type, expires_at, created_at, used_at
+            FROM tokens
+            WHERE token_hash = ? AND token_type = ?
+            "#,
+		)
+		.bind(token_hash)
+		.bind(token_type)
+		.map(|row: sqlx::sqlite::SqliteRow| DbToken {
+			id: row.get("id"),
+			user_id: row.get("user_id"),
+			token_hash: row.get("token_hash"),
+			token_type: row.get("token_type"),
+			expires_at: row.get("expires_at"),
+			created_at: row.get("created_at"),
+			used_at: row.get("used_at"),
+		})
+		.fetch_optional(&self.pool)
+		.await?;
+
+		Ok(token)
+	}
+
+	async fn mark_token_used(&self, token_hash: &str, used_at: i64) -> Result<()> {
+		sqlx::query(
+			r#"
+            UPDATE tokens
+            SET used_at = ?
+            WHERE token_hash = ?
+            "#,
+		)
+		.bind(used_at)
+		.bind(token_hash)
+		.execute(&self.pool)
+		.await?;
+
+		Ok(())
+	}
+
+	async fn delete_token(&self, token_hash: &str) -> Result<()> {
+		sqlx::query(
+			r#"
+            DELETE FROM tokens
+            WHERE token_hash = ?
+            "#,
+		)
+		.bind(token_hash)
+		.execute(&self.pool)
+		.await?;
+
+		Ok(())
+	}
+
+	async fn delete_expired_tokens(&self) -> Result<u64> {
+		let now = std::time::SystemTime::now()
+			.duration_since(std::time::UNIX_EPOCH)
+			.unwrap()
+			.as_secs() as i64;
+
+		let result = sqlx::query(
+			r#"
+            DELETE FROM tokens
             WHERE expires_at < ?
             "#,
 		)

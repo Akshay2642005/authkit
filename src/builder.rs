@@ -58,10 +58,7 @@ impl AuthBuilder {
 		let db_trait = crate::database::create_database_trait(database.inner);
 		let db_arc = Arc::new(db_trait);
 
-		let token_strategy = self
-			.token_strategy
-			.unwrap_or_default()
-			.create_strategy(db_arc.clone());
+		let token_strategy = self.token_strategy.unwrap_or_default().create_strategy();
 
 		Ok(Auth {
 			inner: Arc::new(AuthInner {

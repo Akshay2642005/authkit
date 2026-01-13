@@ -144,7 +144,8 @@ Auth
  └── AuthInner (Arc)
      ├── Database (trait object)
      ├── PasswordStrategy
-     └── SessionStrategy
+     ├── SessionStrategy
+     └── TokenStrategy
 ```
 
 **Key characteristics:**
@@ -152,6 +153,52 @@ Auth
 - Internals are completely hidden
 - Components are swappable via builder pattern
 - No global state required
+
+### Strategy Pattern
+
+AuthKit uses a consistent strategy pattern for all authentication components:
+
+```
+┌─────────────────────────────────────────────────────────┐
+│                    Application Layer                     │
+│  (Auth, Operations: register, login, verify, etc.)      │
+└─────────────────────┬───────────────────────────────────┘
+                      │
+                      ↓
+┌─────────────────────────────────────────────────────────┐
+│                  Strategy Layer                          │
+│  • PasswordStrategy   (Argon2, Bcrypt, etc.)            │
+│  • SessionStrategy    (Database-backed)                  │
+│  • TokenStrategy      (Database-backed)                  │
+│                                                           │
+│  Strategies receive &dyn DatabaseTrait as parameter      │
+└─────────────────────┬───────────────────────────────────┘
+                      │
+                      ↓
+┌─────────────────────────────────────────────────────────┐
+│              DatabaseTrait (Abstraction)                 │
+│                                                           │
+│  • User Operations (create, find)                        │
+│  • Session Operations (create, find, delete)             │
+│  • Token Operations (create, verify, mark used)          │
+└─────────────────────┬───────────────────────────────────┘
+                      │
+                      ↓
+┌─────────────────────────────────────────────────────────┐
+│            Backend Implementations                       │
+│  • SqliteDatabase   (SQLite with ? params)              │
+│  • PostgresDatabase (Postgres with $N params)           │
+└─────────────────────────────────────────────────────────┘
+```
+
+**Design Benefits:**
+- Strategies remain stateless and don't store database references
+- Database logic is centralized in backend implementations
+- Easy to add new database backends (MySQL, etc.)
+- Easy to mock for testing
+- No SQLx types leak into public API
+
+For detailed architecture documentation, see [docs/DATABASE_ARCHITECTURE.md](docs/DATABASE_ARCHITECTURE.md)
 
 ## Feature Flags
 
@@ -210,6 +257,13 @@ AuthKit manages its own schema and migrations:
 ```rust
 auth.migrate().await?;
 ```
+
+**Database Schema:**
+- `users` - User accounts with email and password
+- `sessions` - Active user sessions
+- `tokens` - Unified table for email verification, password reset, etc.
+
+All tables include proper indexes and foreign key constraints for optimal performance and data integrity.
 
 ## API Reference
 
@@ -397,16 +451,21 @@ cargo test --all-features
 - ✅ Email validation
 - ✅ Password validation
 
+**In Progress:**
+- 🚧 Token system (infrastructure complete, operations pending)
+- 🚧 Email verification flow
+
 **Planned:**
 - 🔜 JWT sessions
 - 🔜 Refresh tokens
-- 🔜 Email verification flow
 - 🔜 Password reset flow
+- 🔜 Magic link authentication
 - 🔜 Axum adapter
 - 🔜 Actix adapter
 - 🔜 Rate limiting
 - 🔜 Audit logging
 - 🔜 OAuth integration
+- 🔜 Two-factor authentication
 
 ## Contributing
 
@@ -438,6 +497,13 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ## Acknowledgments
 
 Inspired by [better-auth](https://github.com/better-auth/better-auth) - an excellent authentication library for JavaScript/TypeScript.
+
+## Internal Documentation
+
+For contributors and maintainers:
+
+- 📚 [Database Architecture Guide](docs/DATABASE_ARCHITECTURE.md) - Detailed guide on adding database features
+- 📋 [Agent Guidelines](AGENTS.md) - Contribution guidelines for developers and AI agents
 
 ## Support
 
