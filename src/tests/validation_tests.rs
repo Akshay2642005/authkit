@@ -85,6 +85,17 @@ fn test_password_no_lowercase() {
   }
 }
 
+/// Ensures a password with no digits is rejected and the error message references "digit".
+///
+/// # Examples
+///
+/// ```
+/// let result = password::validate("Password");
+/// assert!(matches!(result, Err(AuthError::WeakPassword(_))));
+/// if let Err(AuthError::WeakPassword(msg)) = result {
+///     assert!(msg.contains("digit"));
+/// }
+/// ```
 #[test]
 fn test_password_no_digit() {
   let result = password::validate("Password");
@@ -94,6 +105,13 @@ fn test_password_no_digit() {
   }
 }
 
+/// Verifies that a password with the minimum allowed length is accepted.
+///
+/// # Examples
+///
+/// ```
+/// assert!(crate::validation::password::validate("Passwor1").is_ok());
+/// ```
 #[test]
 fn test_password_exactly_min_length() {
   assert!(password::validate("Passwor1").is_ok());
@@ -113,6 +131,14 @@ fn test_password_with_special_characters() {
   assert!(password::validate("Test#Pass123").is_ok());
 }
 
+/// Ensures passwords with Unicode characters satisfy the validator's strength rules.
+///
+/// # Examples
+///
+/// ```
+/// assert!(password::validate("Pässw0rd").is_ok());
+/// assert!(password::validate("P4ssw0rd™").is_ok());
+/// ```
 #[test]
 fn test_password_unicode_characters() {
   // Unicode characters should work as long as requirements are met

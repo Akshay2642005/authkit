@@ -35,6 +35,16 @@ pub enum SessionStrategyType {
 }
 
 impl SessionStrategyType {
+  /// Creates a concrete session management strategy corresponding to this variant.
+  ///
+  /// The returned value is a boxed implementation of `SessionStrategy` for the selected strategy type.
+  ///
+  /// # Examples
+  ///
+  /// ```
+  /// let strategy = SessionStrategyType::Database.create_strategy();
+  /// // `strategy` is a Box<dyn SessionStrategy> ready to be used.
+  /// ```
   pub(crate) fn create_strategy(self) -> Box<dyn SessionStrategy> {
     match self {
       Self::Database => Box::new(database_strategy::DatabaseSessionStrategy),

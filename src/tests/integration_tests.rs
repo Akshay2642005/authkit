@@ -10,8 +10,25 @@
 use crate::prelude::*;
 use crate::types::Database;
 
-/// Helper function to set up a test Auth instance with in-memory database
-/// Uses SQLite by default, or Postgres if only postgres feature is enabled
+/// Create a test `Auth` instance wired to an in-memory or test database and run migrations.
+///
+/// Chooses SQLite in-memory when the `sqlite` feature is enabled (unless `postgres` is enabled without `sqlite`),
+/// otherwise uses a Postgres test database (configured via `DATABASE_URL` or a localhost default).
+///
+/// # Examples
+///
+/// ```
+/// # async fn run() -> Result<(), Box<dyn std::error::Error>> {
+/// let auth = crate::tests::setup_test_auth().await?;
+/// // use `auth` for test operations...
+/// assert!(!auth.clone().to_string().is_empty());
+/// # Ok(())
+/// # }
+/// ```
+///
+/// # Returns
+///
+/// `Ok(Auth)` with a fully migrated test `Auth` instance on success, or an error if setup or migrations fail.
 pub(crate) async fn setup_test_auth() -> Result<Auth> {
   #[cfg(all(
     feature = "sqlite",
@@ -65,6 +82,27 @@ async fn test_register_user_success() {
   assert!(user.created_at > 0);
 }
 
+/// Ensures registering a second account with an already-used email returns `AuthError::UserAlreadyExists`.
+///
+/// # Examples
+///
+/// ```
+/// # async fn run() {
+/// let auth = setup_test_auth().await.unwrap();
+/// auth.register(Register {
+///     email: "duplicate@example.com".into(),
+///     password: "SecurePass123".into(),
+/// }).await.unwrap();
+///
+/// let res = auth.register(Register {
+///     email: "duplicate@example.com".into(),
+///     password: "AnotherPass123".into(),
+/// }).await;
+///
+/// assert!(res.is_err());
+/// assert!(matches!(res.unwrap_err(), AuthError::UserAlreadyExists(_)));
+/// # }
+/// ```
 #[tokio::test]
 async fn test_register_duplicate_email() {
   let auth = setup_test_auth().await.unwrap();
@@ -93,6 +131,25 @@ async fn test_register_duplicate_email() {
   ));
 }
 
+/// Verifies that registering with an invalid email fails with `AuthError::InvalidEmailFormat`.
+///
+/// # Examples
+///
+/// ```
+/// # async fn run() -> Result<(), Box<dyn std::error::Error>> {
+/// let auth = setup_test_auth().await.unwrap();
+///
+/// let result = auth
+///     .register(Register {
+///         email: "not-an-email".into(),
+///         password: "SecurePass123".into(),
+///     })
+///     .await;
+///
+/// assert!(result.is_err());
+/// assert!(matches!(result.unwrap_err(), AuthError::InvalidEmailFormat));
+/// # Ok(()) }
+/// ```
 #[tokio::test]
 async fn test_register_invalid_email() {
   let auth = setup_test_auth().await.unwrap();
@@ -108,6 +165,25 @@ async fn test_register_invalid_email() {
   assert!(matches!(result.unwrap_err(), AuthError::InvalidEmailFormat));
 }
 
+/// Verifies that registering with a weak password fails with `AuthError::WeakPassword`.
+///
+/// # Examples
+///
+/// ```
+/// # async fn run() {
+/// let auth = setup_test_auth().await.unwrap();
+///
+/// let result = auth
+///     .register(crate::Register {
+///         email: "test@example.com".into(),
+///         password: "weak".into(),
+///     })
+///     .await;
+///
+/// assert!(result.is_err());
+/// assert!(matches!(result.unwrap_err(), crate::AuthError::WeakPassword(_)));
+/// # }
+/// ```
 #[tokio::test]
 async fn test_register_weak_password() {
   let auth = setup_test_auth().await.unwrap();
@@ -123,6 +199,22 @@ async fn test_register_weak_password() {
   assert!(matches!(result.unwrap_err(), AuthError::WeakPassword(_)));
 }
 
+/// Verifies that a registered user can log in and receives a valid session.
+///
+/// Registers a user, logs in with the same credentials, and asserts the returned session
+/// contains a non-empty token, the expected `user_id`, and a positive `expires_at`.
+///
+/// # Examples
+///
+/// ```
+/// // Setup test auth, register a user, then login and inspect the session:
+/// let auth = setup_test_auth().await.unwrap();
+/// let user = auth.register(Register { email: "login@example.com".into(), password: "SecurePass123".into() }).await.unwrap();
+/// let session = auth.login(Login { email: "login@example.com".into(), password: "SecurePass123".into() }).await.unwrap();
+/// assert!(!session.token.is_empty());
+/// assert_eq!(session.user_id, user.id);
+/// assert!(session.expires_at > 0);
+/// ```
 #[tokio::test]
 async fn test_login_success() {
   let auth = setup_test_auth().await.unwrap();
@@ -176,6 +268,25 @@ async fn test_login_wrong_password() {
   assert!(matches!(result.unwrap_err(), AuthError::InvalidCredentials));
 }
 
+/// Verifies that attempting to log in with an email that is not registered fails.
+///
+/// # Examples
+///
+/// ```
+/// # tokio_test::block_on(async {
+/// let auth = setup_test_auth().await.unwrap();
+///
+/// let result = auth
+///     .login(Login {
+///         email: "nonexistent@example.com".into(),
+///         password: "SecurePass123".into(),
+///     })
+///     .await;
+///
+/// assert!(result.is_err());
+/// assert!(matches!(result.unwrap_err(), AuthError::InvalidCredentials));
+/// # });
+/// ```
 #[tokio::test]
 async fn test_login_nonexistent_user() {
   let auth = setup_test_auth().await.unwrap();
@@ -231,6 +342,38 @@ async fn test_verify_invalid_token() {
   assert!(matches!(result.unwrap_err(), AuthError::InvalidSession));
 }
 
+/// Verifies that logging out invalidates an existing session token.
+///
+/// This integration test registers a user, logs in to create a session, asserts the
+/// session is initially valid, calls logout for that session token, and then
+/// asserts that subsequent verification of the same token fails with `AuthError::InvalidSession`.
+///
+/// # Examples
+///
+/// ```
+/// # async fn run_test(auth: &crate::Auth) {
+/// // register and login
+/// auth.register(crate::Register {
+///     email: "logout@example.com".into(),
+///     password: "SecurePass123".into(),
+/// }).await.unwrap();
+///
+/// let session = auth.login(crate::Login {
+///     email: "logout@example.com".into(),
+///     password: "SecurePass123".into(),
+/// }).await.unwrap();
+///
+/// // verify exists
+/// assert!(auth.verify(crate::Verify::new(&session.token)).await.is_ok());
+///
+/// // logout and verify invalidation
+/// auth.logout(crate::Logout::new(&session.token)).await.unwrap();
+/// assert!(matches!(
+///     auth.verify(crate::Verify::new(&session.token)).await.unwrap_err(),
+///     crate::AuthError::InvalidSession
+/// ));
+/// # }
+/// ```
 #[tokio::test]
 async fn test_logout_success() {
   let auth = setup_test_auth().await.unwrap();
@@ -402,6 +545,30 @@ async fn test_register_multiple_users() {
   }
 }
 
+/// Checks that a session token provided as a string slice can be converted and verified.
+///
+/// This test ensures the `From<&str>` (or `Into`) implementation for the token type is accepted
+/// by `verify`, allowing callers to pass `&str` directly.
+///
+/// # Examples
+///
+/// ```
+/// # async fn run_example(auth: &crate::Auth) {
+/// auth.register(crate::Register {
+///     email: "test@example.com".into(),
+///     password: "SecurePass123".into(),
+/// }).await.unwrap();
+///
+/// let session = auth.login(crate::Login {
+///     email: "test@example.com".into(),
+///     password: "SecurePass123".into(),
+/// }).await.unwrap();
+///
+/// // Pass a `&str` token to `verify` via `Into`
+/// let result = auth.verify(session.token.as_str().into()).await;
+/// assert!(result.is_ok());
+/// # }
+/// ```
 #[tokio::test]
 async fn test_verify_from_string() {
   let auth = setup_test_auth().await.unwrap();
@@ -427,6 +594,27 @@ async fn test_verify_from_string() {
   assert!(result.is_ok());
 }
 
+/// Ensures logout succeeds when called with a session token converted from a `&str`.
+///
+/// # Examples
+///
+/// ```
+/// # tokio_test::block_on(async {
+/// let auth = setup_test_auth().await.unwrap();
+/// auth.register(Register {
+///     email: "test@example.com".into(),
+///     password: "SecurePass123".into(),
+/// }).await.unwrap();
+///
+/// let session = auth.login(Login {
+///     email: "test@example.com".into(),
+///     password: "SecurePass123".into(),
+/// }).await.unwrap();
+///
+/// let result = auth.logout(session.token.as_str().into()).await;
+/// assert!(result.is_ok());
+/// # });
+/// ```
 #[tokio::test]
 async fn test_logout_from_string() {
   let auth = setup_test_auth().await.unwrap();

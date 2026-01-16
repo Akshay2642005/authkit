@@ -24,13 +24,24 @@ pub struct ResendEmailVerification {
   pub email: String,
 }
 
-/// Execute email verification send operation
+/// Generates an email verification token for the specified user.
 ///
-/// This generates a verification token for the user. The token is returned
-/// in a `VerificationToken` struct, which the application should use to
-/// send an email to the user.
+/// Returns an error if the user does not exist or if the user's email is already verified. The generated token expires 24 hours after creation.
 ///
-/// The token expires in 24 hours by default.
+/// # Returns
+///
+/// A `VerificationToken` containing the token string, the user's email, and the token expiry timestamp.
+///
+/// # Examples
+///
+/// ```no_run
+/// # use crate::operations::email_verification::{send_email_verification, SendEmailVerification};
+/// # async fn run(auth: &crate::Auth) {
+/// let req = SendEmailVerification { user_id: "user-123".into() };
+/// let token = send_email_verification(auth, req).await.unwrap();
+/// assert!(!token.token.is_empty());
+/// # }
+/// ```
 pub(crate) async fn send_email_verification(
   auth: &Auth,
   request: SendEmailVerification,
@@ -70,10 +81,27 @@ pub(crate) async fn send_email_verification(
   })
 }
 
-/// Execute email verification operation
+/// Verify an email verification token and mark the associated user's email as verified.
 ///
-/// This verifies the provided token and marks the user's email as verified
-/// if the token is valid, not expired, and not already used.
+/// Verifies the provided token for email verification, marks the token as used, updates the user's
+/// `email_verified` timestamp to the current UNIX epoch seconds, and returns the updated user.
+///
+/// # Errors
+///
+/// Returns `AuthError::UserNotFound` if the token's user cannot be found, `AuthError::EmailAlreadyVerified`
+/// if the user's email is already verified, or any error returned by the token strategy or database calls.
+///
+/// # Examples
+///
+/// ```no_run
+/// # async fn run_example() -> Result<(), Box<dyn std::error::Error>> {
+/// let auth = /* obtain Auth */ unimplemented!();
+/// let req = VerifyEmail { token: "token-string".to_string() };
+/// let user = verify_email(&auth, req).await?;
+/// println!("Verified user id: {}", user.id);
+/// # Ok(())
+/// # }
+/// ```
 pub(crate) async fn verify_email(auth: &Auth, request: VerifyEmail) -> Result<User> {
   // Verify the token
   let verified_token = auth
@@ -131,10 +159,31 @@ pub(crate) async fn verify_email(auth: &Auth, request: VerifyEmail) -> Result<Us
   Ok(updated_user)
 }
 
-/// Execute resend email verification operation
+/// Resend an email verification token to the given email address.
 ///
-/// This finds the user by email and generates a new verification token
-/// if the email is not already verified.
+/// Finds the user by email, returns `UserNotFound` if missing, returns `EmailAlreadyVerified` if the
+/// email is already verified, generates a new `EmailVerification` token valid for 24 hours, and
+/// returns a `VerificationToken` containing the token value, the user's email, and the expiry time.
+///
+/// # Examples
+///
+/// ```
+/// #[tokio::test]
+/// async fn example_resend_email_verification() {
+///     // Setup `auth` and ensure a user exists with the given email for this example.
+///     let auth = /* test Auth setup */;
+///     let req = crate::operations::email_verification::ResendEmailVerification {
+///         email: "user@example.com".into(),
+///     };
+///
+///     let token = crate::operations::email_verification::resend_email_verification(&auth, req)
+///         .await
+///         .unwrap();
+///
+///     assert_eq!(token.email, "user@example.com");
+///     // `token.token` is a new verification token and `token.expires_at` is ~24 hours in the future.
+/// }
+/// ```
 pub(crate) async fn resend_email_verification(
   auth: &Auth,
   request: ResendEmailVerification,

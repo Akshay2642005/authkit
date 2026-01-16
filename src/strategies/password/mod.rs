@@ -71,6 +71,32 @@ compile_error!(
 );
 
 impl Default for PasswordStrategyType {
+  /// Selects the default password hashing strategy based on enabled features.
+  ///
+  /// Returns the default `PasswordStrategyType`: `Argon2` when the `argon2` feature is enabled,
+  /// otherwise `Bcrypt` (when `bcrypt` is enabled).
+  ///
+  /// # Examples
+  ///
+  /// ```
+  /// // When compiled with the "argon2" feature
+  /// # #[cfg(feature = "argon2")]
+  /// # {
+  /// use crate::PasswordStrategyType;
+  /// let def = PasswordStrategyType::default();
+  /// assert!(matches!(def, PasswordStrategyType::Argon2));
+  /// # }
+  /// ```
+  ///
+  /// ```
+  /// // When compiled with the "bcrypt" feature but without "argon2"
+  /// # #[cfg(all(not(feature = "argon2"), feature = "bcrypt"))]
+  /// # {
+  /// use crate::PasswordStrategyType;
+  /// let def = PasswordStrategyType::default();
+  /// assert!(matches!(def, PasswordStrategyType::Bcrypt));
+  /// # }
+  /// ```
   fn default() -> Self {
     // Prioritize argon2 (recommended)
     #[cfg(feature = "argon2")]
@@ -83,6 +109,17 @@ impl Default for PasswordStrategyType {
 }
 
 impl PasswordStrategyType {
+  /// Create a concrete boxed password hashing strategy for this variant.
+  ///
+  /// Returns a boxed implementation of `PasswordStrategy` for the selected variant when available.
+  /// If the chosen variant is not implemented (currently bcrypt), an `AuthError::InternalError` is returned.
+  ///
+  /// # Examples
+  ///
+  /// ```
+  /// let strategy = crate::password::PasswordStrategyType::default().create_strategy().unwrap();
+  /// // `strategy` is a `Box<dyn crate::password::PasswordStrategy>` and can be used to hash/verify passwords.
+  /// ```
   pub(crate) fn create_strategy(self) -> Result<Box<dyn PasswordStrategy>> {
     match self {
       #[cfg(feature = "argon2")]

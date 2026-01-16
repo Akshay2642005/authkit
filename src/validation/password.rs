@@ -3,14 +3,20 @@ use crate::error::{AuthError, Result};
 const MIN_PASSWORD_LENGTH: usize = 8;
 const MAX_PASSWORD_LENGTH: usize = 128;
 
-/// Validate password strength
+/// Validates that a password meets the project's strength requirements.
 ///
-/// Requirements:
-/// - At least 8 characters
-/// - At most 128 characters
-/// - Contains at least one uppercase letter
-/// - Contains at least one lowercase letter
-/// - Contains at least one digit
+/// The password must be between 8 and 128 characters (inclusive), contain at least one
+/// uppercase letter, at least one lowercase letter, and at least one digit. On failure
+/// returns `AuthError::WeakPassword` with a message describing the first unmet requirement.
+///
+/// # Examples
+///
+/// ```
+/// use crate::validation::password::validate;
+///
+/// assert!(validate("StrongPass1").is_ok());
+/// assert!(validate("weak").is_err());
+/// ```
 pub fn validate(password: &str) -> Result<()> {
   if password.len() < MIN_PASSWORD_LENGTH {
     return Err(AuthError::WeakPassword(format!(

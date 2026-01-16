@@ -31,6 +31,24 @@ pub(crate) struct DbToken {
 }
 
 impl From<DbUser> for crate::types::User {
+  /// Converts a database `DbUser` record into the public `crate::types::User` representation.
+  ///
+  /// # Examples
+  ///
+  /// ```
+  /// let db_user = DbUser {
+  ///     id: "user-1".into(),
+  ///     email: "user@example.com".into(),
+  ///     password_hash: "hash".into(),
+  ///     email_verified: true,
+  ///     email_verified_at: Some(1_640_995_200),
+  ///     created_at: 1_640_995_200,
+  /// };
+  /// let user: crate::types::User = db_user.into();
+  /// assert_eq!(user.id, "user-1");
+  /// assert_eq!(user.email, "user@example.com");
+  /// assert!(user.email_verified);
+  /// ```
   fn from(db_user: DbUser) -> Self {
     crate::types::User {
       id: db_user.id,

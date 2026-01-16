@@ -94,6 +94,18 @@ pub(crate) trait DatabaseTrait: Send + Sync {
   async fn delete_expired_tokens(&self) -> Result<u64>;
 }
 
+/// Returns a boxed trait object implementing the database backend represented by `inner`.
+///
+/// The returned `Box<dyn DatabaseTrait>` forwards database operations to the concrete backend
+/// contained in `DatabaseInner` (e.g., SQLite or Postgres).
+///
+/// # Examples
+///
+/// ```no_run
+/// // `inner` should be constructed from a concrete backend (DatabaseInner::Sqlite or DatabaseInner::Postgres)
+/// let inner = /* construct DatabaseInner */ ;
+/// let db: Box<dyn DatabaseTrait> = create_database_trait(inner);
+/// ```
 pub(crate) fn create_database_trait(inner: DatabaseInner) -> Box<dyn DatabaseTrait> {
   match inner {
     #[cfg(feature = "sqlite")]

@@ -2,6 +2,19 @@
 mod tests {
   use crate::prelude::*;
 
+  /// Creates and returns an `Auth` instance backed by an in-memory SQLite database with migrations applied.
+  ///
+  /// This helper builds an `Auth` configured to use an ephemeral SQLite database (":memory:") and runs the migrations before returning the ready instance.
+  ///
+  /// # Examples
+  ///
+  /// ```
+  /// # async fn run() -> Result<(), Box<dyn std::error::Error>> {
+  /// let auth = crate::tests::setup_auth().await?; // returns a configured Auth with migrations applied
+  /// // use `auth` in tests...
+  /// # Ok(())
+  /// # }
+  /// ```
   async fn setup_auth() -> Result<Auth> {
     let auth = Auth::builder()
       .database(Database::sqlite(":memory:").await?)
@@ -10,6 +23,32 @@ mod tests {
     Ok(auth)
   }
 
+  /// Verifies that sending an email verification generates a token and expiration for a newly registered user.
+  ///
+  /// The test registers a new user, confirms the user's email is initially unverified,
+  /// sends an email verification, and asserts that the returned verification contains the
+  /// correct email address, a non-empty token, and a positive expiration timestamp.
+  ///
+  /// # Examples
+  ///
+  /// ```
+  /// # async fn run() {
+  /// let auth = setup_auth().await.unwrap();
+  /// let user = auth.register(Register {
+  ///     email: "test@example.com".to_string(),
+  ///     password: "SecurePass123!".to_string(),
+  /// }).await.unwrap();
+  /// assert!(!user.email_verified);
+  ///
+  /// let verification = auth.send_email_verification(SendEmailVerification {
+  ///     user_id: user.id.clone(),
+  /// }).await.unwrap();
+  ///
+  /// assert_eq!(verification.email, "test@example.com");
+  /// assert!(!verification.token.is_empty());
+  /// assert!(verification.expires_at > 0);
+  /// # }
+  /// ```
   #[tokio::test]
   async fn test_send_email_verification_success() {
     let auth = setup_auth().await.unwrap();
@@ -52,6 +91,17 @@ mod tests {
     assert!(matches!(result.unwrap_err(), AuthError::UserNotFound));
   }
 
+  /// Verifies that attempting to send an email verification for a user whose email is already verified fails with `AuthError::EmailAlreadyVerified`.
+  ///
+  /// Registers a user, sends and consumes an email verification token to mark the email verified, then attempts to send another verification and asserts the `EmailAlreadyVerified` error is returned.
+  ///
+  /// # Examples
+  ///
+  /// ```no_run
+  /// // Arrange: register a user, send a verification, and verify it
+  /// // Act: attempt to send another verification
+  /// // Assert: receive AuthError::EmailAlreadyVerified
+  /// ```
   #[tokio::test]
   async fn test_send_email_verification_already_verified() {
     let auth = setup_auth().await.unwrap();
@@ -131,6 +181,20 @@ mod tests {
     assert_eq!(verified_user.email, "test@example.com");
   }
 
+  /// Ensures verifying an email with an invalid token returns an `InvalidToken` error.
+  ///
+  /// Attempts to verify an email using a token that does not exist or is malformed,
+  /// and expects the operation to fail with `AuthError::InvalidToken`.
+  ///
+  /// # Examples
+  ///
+  /// ```
+  /// # async fn run_example(auth: &crate::Auth) {
+  /// let res = auth.verify_email(crate::VerifyEmail { token: "bad-token".into() }).await;
+  /// assert!(res.is_err());
+  /// assert!(matches!(res.unwrap_err(), crate::AuthError::InvalidToken(_)));
+  /// # }
+  /// ```
   #[tokio::test]
   async fn test_verify_email_invalid_token() {
     let auth = setup_auth().await.unwrap();
@@ -188,6 +252,37 @@ mod tests {
     ));
   }
 
+  /// Ensures that an email cannot be verified a second time after it has already been verified.
+  ///
+  /// This test registers a user, sends an initial email verification, and verifies the user once. It documents the attempted re-verification scenario but does not perform a second verification because a new verification token cannot be generated for an already-verified email.
+  ///
+  /// # Examples
+  ///
+  /// ```
+  /// // Registers, sends verification, and verifies once.
+  /// let auth = setup_auth().await.unwrap();
+  /// let user = auth
+  ///     .register(Register {
+  ///         email: "test@example.com".to_string(),
+  ///         password: "SecurePass123!".to_string(),
+  ///     })
+  ///     .await
+  ///     .unwrap();
+  ///
+  /// let verification = auth
+  ///     .send_email_verification(SendEmailVerification {
+  ///         user_id: user.id.clone(),
+  ///     })
+  ///     .await
+  ///     .unwrap();
+  ///
+  /// auth
+  ///     .verify_email(VerifyEmail {
+  ///         token: verification.token,
+  ///     })
+  ///     .await
+  ///     .unwrap();
+  /// ```
   #[tokio::test]
   async fn test_verify_email_already_verified() {
     let auth = setup_auth().await.unwrap();
@@ -222,6 +317,31 @@ mod tests {
     // send_email_verification will fail for already-verified users
   }
 
+  /// Confirms that resending an email verification issues a new verification token for the given email.
+  ///
+  /// # Examples
+  ///
+  /// ```
+  /// # async fn run() -> Result<(), Box<dyn std::error::Error>> {
+  /// let auth = setup_auth().await?;
+  /// let user = auth.register(Register {
+  ///     email: "test@example.com".to_string(),
+  ///     password: "SecurePass123!".to_string(),
+  /// }).await?;
+  ///
+  /// let first = auth.send_email_verification(SendEmailVerification {
+  ///     user_id: user.id.clone(),
+  /// }).await?;
+  ///
+  /// let second = auth.resend_email_verification(ResendEmailVerification {
+  ///     email: "test@example.com".to_string(),
+  /// }).await?;
+  ///
+  /// assert_eq!(second.email, "test@example.com");
+  /// assert!(!second.token.is_empty());
+  /// assert_ne!(first.token, second.token);
+  /// # Ok(()) }
+  /// ```
   #[tokio::test]
   async fn test_resend_email_verification_success() {
     let auth = setup_auth().await.unwrap();
@@ -270,6 +390,49 @@ mod tests {
     assert!(matches!(result.unwrap_err(), AuthError::UserNotFound));
   }
 
+  /// Ensures that resending an email verification fails when the user's email is already verified.
+  ///
+  /// This test registers a user, sends an initial verification, verifies the email using the token,
+  /// then attempts to resend a verification and asserts the operation returns `AuthError::EmailAlreadyVerified`.
+  ///
+  /// # Examples
+  ///
+  /// ```
+  /// // Register and verify a user
+  /// let user = auth
+  ///   .register(Register {
+  ///     email: "test@example.com".to_string(),
+  ///     password: "SecurePass123!".to_string(),
+  ///   })
+  ///   .await
+  ///   .unwrap();
+  ///
+  /// let verification = auth
+  ///   .send_email_verification(SendEmailVerification {
+  ///     user_id: user.id.clone(),
+  ///   })
+  ///   .await
+  ///   .unwrap();
+  ///
+  /// auth
+  ///   .verify_email(VerifyEmail {
+  ///     token: verification.token,
+  ///   })
+  ///   .await
+  ///   .unwrap();
+  ///
+  /// // Attempt to resend verification and expect an EmailAlreadyVerified error
+  /// let result = auth
+  ///   .resend_email_verification(ResendEmailVerification {
+  ///     email: "test@example.com".to_string(),
+  ///   })
+  ///   .await;
+  /// assert!(result.is_err());
+  /// assert!(matches!(
+  ///   result.unwrap_err(),
+  ///   AuthError::EmailAlreadyVerified(_)
+  /// ));
+  /// ```
   #[tokio::test]
   async fn test_resend_email_verification_already_verified() {
     let auth = setup_auth().await.unwrap();
@@ -377,6 +540,17 @@ mod tests {
       .unwrap();
   }
 
+  /// Tests email verification behavior for multiple users.
+  ///
+  /// Registers two users, sends separate verification emails for each, verifies the first user
+  /// and asserts the second remains unverified, then verifies the second user and asserts it becomes verified.
+  ///
+  /// # Examples
+  ///
+  /// ```
+  /// // Registers two users, sends verification tokens, verifies user1, checks user2 is still unverified,
+  /// // then verifies user2.
+  /// ```
   #[tokio::test]
   async fn test_multiple_users_email_verification() {
     let auth = setup_auth().await.unwrap();

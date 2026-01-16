@@ -9,6 +9,17 @@
 
 use authkit::prelude::*;
 
+/// Runs the Email Verification example demonstrating AuthKit flows using an in-memory SQLite database.
+///
+/// The example exercises registration, login (without required email verification), generation and single-use verification
+/// tokens, resend semantics, session validation after verification, and cleanup. It prints progress and outcomes for each step.
+///
+/// # Examples
+///
+/// ```no_run
+/// // Run the example binary to observe the full flow and printed output:
+/// // cargo run --example email_verification
+/// ```
 #[tokio::main]
 async fn main() -> Result<()> {
   println!("=== AuthKit Email Verification Example ===\n");

@@ -8,6 +8,28 @@ pub struct Login {
   pub password: String,
 }
 
+/// Authenticate the provided credentials and create a session token for the user.
+///
+/// On success returns a `Session` containing the newly generated token, the user's id,
+/// and the expiration timestamp (current UNIX time plus 86400 seconds).
+///
+/// If the email is not found or the password verification fails, returns `Err(AuthError::InvalidCredentials)`.
+/// Other underlying errors from the database, password strategy, or session creation are propagated.
+///
+/// # Examples
+///
+/// ```no_run
+/// use crate::{Auth, Login};
+/// # async fn example(auth: &Auth) -> anyhow::Result<()> {
+/// let login = Login { email: "user@example.com".into(), password: "secret".into() };
+/// // `execute` is async; run it on a runtime (example uses tokio)
+/// let session = tokio::runtime::Runtime::new()?.block_on(async {
+///     crate::auth::execute(auth, login).await
+/// })?;
+/// assert!(session.expires_at > 0);
+/// # Ok(())
+/// # }
+/// ```
 pub(crate) async fn execute(auth: &Auth, request: Login) -> Result<Session> {
   let user = auth
     .inner

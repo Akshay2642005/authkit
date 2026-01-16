@@ -8,6 +8,17 @@ pub enum TokenStrategyType {
 }
 
 impl TokenStrategyType {
+  /// Create a token strategy instance for this strategy type.
+  ///
+  /// # Returns
+  ///
+  /// A boxed `TokenStrategy` implementation corresponding to `self`.
+  ///
+  /// # Examples
+  ///
+  /// ```
+  /// let _ = crate::strategies::token::TokenStrategyType::Database.create_strategy();
+  /// ```
   pub(crate) fn create_strategy(self) -> Box<dyn TokenStrategy> {
     match self {
       TokenStrategyType::Database => Box::new(database_strategy::DatabaseTokenStrategy),
@@ -24,6 +35,14 @@ pub enum TokenType {
 }
 
 impl TokenType {
+  /// Returns the token type as a static string identifier.
+  ///
+  /// # Examples
+  ///
+  /// ```
+  /// let s = TokenType::EmailVerification.as_str();
+  /// assert_eq!(s, "email_verification");
+  /// ```
   #[allow(dead_code)]
   pub fn as_str(&self) -> &'static str {
     match self {

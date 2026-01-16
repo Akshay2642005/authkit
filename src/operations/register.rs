@@ -9,6 +9,39 @@ pub struct Register {
   pub password: String,
 }
 
+/// Registers a new user with the provided email and password.
+///
+/// Validates the email and password, ensures no existing user has the same email,
+/// hashes the password, generates a user ID and creation timestamp, and persists the user.
+///
+/// # Parameters
+///
+/// - `auth`: Authentication context containing database and password strategy.
+/// - `request`: Registration payload with `email` and `password`.
+///
+/// # Returns
+///
+/// The newly created `User`.
+///
+/// # Errors
+///
+/// Returns validation errors for email or password, or `AuthError::UserAlreadyExists(email)`
+/// if an account with the given email already exists. Other underlying I/O or hashing errors
+/// may also be propagated.
+///
+/// # Examples
+///
+/// ```
+/// # async fn example(auth: &crate::Auth) -> Result<(), crate::AuthError> {
+/// let req = crate::register::Register {
+///     email: "alice@example.com".to_string(),
+///     password: "s3cur3P@ssw0rd".to_string(),
+/// };
+/// let user = crate::register::execute(auth, req).await?;
+/// assert_eq!(user.email, "alice@example.com");
+/// # Ok(())
+/// # }
+/// ```
 pub(crate) async fn execute(auth: &Auth, request: Register) -> Result<User> {
   validation::email::validate(&request.email)?;
 
