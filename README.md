@@ -160,32 +160,32 @@ AuthKit uses a consistent strategy pattern for all authentication components:
 
 ```
 ┌─────────────────────────────────────────────────────────┐
-│                    Application Layer                     │
+│                    Application Layer                    │
 │  (Auth, Operations: register, login, verify, etc.)      │
 └─────────────────────┬───────────────────────────────────┘
                       │
                       ↓
 ┌─────────────────────────────────────────────────────────┐
-│                  Strategy Layer                          │
+│                  Strategy Layer                         │
 │  • PasswordStrategy   (Argon2, Bcrypt, etc.)            │
-│  • SessionStrategy    (Database-backed)                  │
-│  • TokenStrategy      (Database-backed)                  │
-│                                                           │
-│  Strategies receive &dyn DatabaseTrait as parameter      │
+│  • SessionStrategy    (Database-backed)                 │
+│  • TokenStrategy      (Database-backed)                 │
+│                                                         │
+│  Strategies receive &dyn DatabaseTrait as parameter     │
 └─────────────────────┬───────────────────────────────────┘
                       │
                       ↓
 ┌─────────────────────────────────────────────────────────┐
-│              DatabaseTrait (Abstraction)                 │
-│                                                           │
-│  • User Operations (create, find)                        │
-│  • Session Operations (create, find, delete)             │
-│  • Token Operations (create, verify, mark used)          │
+│              DatabaseTrait (Abstraction)                │
+│                                                         │
+│  • User Operations (create, find)                       │
+│  • Session Operations (create, find, delete)            │
+│  • Token Operations (create, verify, mark used)         │
 └─────────────────────┬───────────────────────────────────┘
                       │
                       ↓
 ┌─────────────────────────────────────────────────────────┐
-│            Backend Implementations                       │
+│            Backend Implementations                      │
 │  • SqliteDatabase   (SQLite with ? params)              │
 │  • PostgresDatabase (Postgres with $N params)           │
 └─────────────────────────────────────────────────────────┘
@@ -197,8 +197,6 @@ AuthKit uses a consistent strategy pattern for all authentication components:
 - Easy to add new database backends (MySQL, etc.)
 - Easy to mock for testing
 - No SQLx types leak into public API
-
-For detailed architecture documentation, see [docs/DATABASE_ARCHITECTURE.md](docs/DATABASE_ARCHITECTURE.md)
 
 ## Feature Flags
 
@@ -578,12 +576,6 @@ Unless you explicitly state otherwise, any contribution intentionally submitted 
 
 Inspired by [better-auth](https://github.com/better-auth/better-auth) - an excellent authentication library for JavaScript/TypeScript.
 
-## Internal Documentation
-
-For contributors and maintainers:
-
-- 📚 [Database Architecture Guide](docs/DATABASE_ARCHITECTURE.md) - Detailed guide on adding database features
-- 📋 [Agent Guidelines](AGENTS.md) - Contribution guidelines for developers and AI agents
 
 ## Support
 
