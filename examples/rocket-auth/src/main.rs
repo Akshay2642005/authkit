@@ -149,7 +149,7 @@ async fn rocket() -> _ {
   println!("   POST /auth/logout                   - Logout user");
   println!("   GET  /auth/verify?token=<TOKEN>     - Verify session");
   println!("   POST /email/send-verification       - Send verification email");
-  println!("   GET  /email/verify?token=<TOKEN>    - Verify email (click link in email)");
+  println!("   POST /email/verify                  - Verify email with token");
   println!("   POST /email/resend-verification     - Resend verification email");
   println!("\n💡 Tips:");
   println!("   - Configure SMTP in .env file or environment variables");
