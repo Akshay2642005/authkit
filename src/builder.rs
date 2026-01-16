@@ -95,12 +95,7 @@ impl AuthBuilder {
 
     let token_strategy = self.token_strategy.unwrap_or_default().create_strategy();
 
-    #[allow(clippy::manual_map)]
-    let email_sender = if let Some(sender) = self.email_sender {
-      Some(Arc::new(sender))
-    } else {
-      None
-    };
+    let email_sender = self.email_sender.map(Arc::new);
 
     Ok(Auth {
       inner: Arc::new(AuthInner {
