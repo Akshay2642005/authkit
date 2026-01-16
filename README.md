@@ -324,6 +324,62 @@ auth.logout(Logout {
 }).await?;
 ```
 
+#### Send Email Verification
+
+Generate a verification token for a user:
+
+```rust
+let verification = auth.send_email_verification(SendEmailVerification {
+    user_id: user.id.clone(),
+}).await?;
+
+// Send the token via email (application's responsibility)
+send_email(&verification.email, &verification.token).await?;
+```
+
+**Returns:**
+- `VerificationToken` with token, email, and expiration time
+- Token expires in 24 hours
+
+**Errors:**
+- User not found
+- Email already verified
+
+#### Verify Email
+
+Verify a user's email using a token:
+
+```rust
+let verified_user = auth.verify_email(VerifyEmail {
+    token: verification_token,
+}).await?;
+```
+
+**Returns:**
+- Updated `User` with `email_verified` set to `true`
+
+**Errors:**
+- Invalid or expired token
+- Token already used
+- Email already verified
+
+#### Resend Email Verification
+
+Resend verification token to a user:
+
+```rust
+let verification = auth.resend_email_verification(ResendEmailVerification {
+    email: "user@example.com".into(),
+}).await?;
+```
+
+**Returns:**
+- New `VerificationToken` (old tokens remain valid until used or expired)
+
+**Errors:**
+- User not found
+- Email already verified
+
 ### Types
 
 #### User
@@ -344,6 +400,16 @@ pub struct User {
 pub struct Session {
     pub token: String,
     pub user_id: String,
+    pub expires_at: i64,
+}
+```
+
+#### VerificationToken
+
+```rust
+pub struct VerificationToken {
+    pub token: String,
+    pub email: String,
     pub expires_at: i64,
 }
 ```
@@ -419,9 +485,16 @@ match auth.login(login_request).await {
 
 Check the `examples/` directory for more usage examples:
 
-- `basic.rs` - Simple registration and login flow
+- `email_verification.rs` - Complete email verification workflow
+- `basic.rs` - Simple registration and login flow (planned)
 - `web_server.rs` - Integration with Axum (planned)
 - `cli_tool.rs` - CLI authentication example (planned)
+
+Run an example:
+
+```bash
+cargo run --example email_verification --features sqlite
+```
 
 ## Testing
 
@@ -450,10 +523,8 @@ cargo test --all-features
 - ✅ Database sessions
 - ✅ Email validation
 - ✅ Password validation
-
-**In Progress:**
-- 🚧 Token system (infrastructure complete, operations pending)
-- 🚧 Email verification flow
+- ✅ Token system (database-backed)
+- ✅ Email verification flow (send, verify, resend)
 
 **Planned:**
 - 🔜 JWT sessions
@@ -492,7 +563,16 @@ You **MUST NOT**:
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+This project is dual-licensed under your choice of:
+
+- MIT License ([LICENSE-MIT](LICENSE-MIT))
+- Apache License, Version 2.0 ([LICENSE-APACHE](LICENSE-APACHE))
+
+at your option.
+
+### Contribution
+
+Unless you explicitly state otherwise, any contribution intentionally submitted for inclusion in the work by you, as defined in the Apache-2.0 license, shall be dual licensed as above, without any additional terms or conditions.
 
 ## Acknowledgments
 

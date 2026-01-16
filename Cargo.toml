@@ -1,11 +1,23 @@
 [package]
 name = "authkit"
 version = "0.1.0"
-edition = "2024"
+edition = "2021"
+rust-version = "1.75"
 
-license = "MIT"
+license = "MIT OR Apache-2.0"
 authors = ["Akshay B <akshay2642005@gmail.com>"]
-description = "A Rust authentication library supporting multiple hashing algorithms and databases."
+description = "A better-auth inspired authentication library for Rust. Framework-agnostic, secure by default, with database-backed sessions and email verification."
+repository = "https://github.com/Akshay2642005/authkit"
+documentation = "https://docs.rs/authkit"
+homepage = "https://github.com/Akshay2642005/authkit"
+readme = "README.md"
+keywords = ["authentication", "auth", "session", "password", "security"]
+categories = ["authentication", "web-programming", "database"]
+exclude = [
+    "internal/*",
+    ".github/*",
+    "target/*",
+]
 
 [lib]
 name = "authkit"

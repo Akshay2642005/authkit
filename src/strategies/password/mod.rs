@@ -9,11 +9,11 @@ use async_trait::async_trait;
 /// Password hashing strategy trait (internal)
 #[async_trait]
 pub(crate) trait PasswordStrategy: Send + Sync {
-	/// Hash a password
-	async fn hash_password(&self, password: &str) -> Result<String>;
+  /// Hash a password
+  async fn hash_password(&self, password: &str) -> Result<String>;
 
-	/// Verify a password against a hash (timing-safe)
-	async fn verify_password(&self, password: &str, hash: &str) -> Result<bool>;
+  /// Verify a password against a hash (timing-safe)
+  async fn verify_password(&self, password: &str, hash: &str) -> Result<bool>;
 }
 
 /// Public enum for selecting password strategy
@@ -43,17 +43,17 @@ pub(crate) trait PasswordStrategy: Send + Sync {
 /// ```
 #[derive(Debug, Clone, Copy)]
 pub enum PasswordStrategyType {
-	#[cfg(feature = "argon2")]
-	Argon2,
-	#[cfg(feature = "bcrypt")]
-	Bcrypt,
+  #[cfg(feature = "argon2")]
+  Argon2,
+  #[cfg(feature = "bcrypt")]
+  Bcrypt,
 }
 
 // Compile-time check: at least one password strategy must be enabled
 // This will fail compilation if neither argon2 nor bcrypt features are enabled
 #[cfg(not(any(feature = "argon2", feature = "bcrypt")))]
 compile_error!(
-	"AuthKit requires at least one password hashing strategy feature to be enabled.\n\
+  "AuthKit requires at least one password hashing strategy feature to be enabled.\n\
 	 \n\
 	 Available strategies:\n\
 	 - 'argon2' (recommended, secure default)\n\
@@ -71,29 +71,29 @@ compile_error!(
 );
 
 impl Default for PasswordStrategyType {
-	fn default() -> Self {
-		// Prioritize argon2 (recommended)
-		#[cfg(feature = "argon2")]
-		return Self::Argon2;
+  fn default() -> Self {
+    // Prioritize argon2 (recommended)
+    #[cfg(feature = "argon2")]
+    return Self::Argon2;
 
-		// Fall back to bcrypt if argon2 not available
-		#[cfg(all(not(feature = "argon2"), feature = "bcrypt"))]
-		return Self::Bcrypt;
-	}
+    // Fall back to bcrypt if argon2 not available
+    #[cfg(all(not(feature = "argon2"), feature = "bcrypt"))]
+    return Self::Bcrypt;
+  }
 }
 
 impl PasswordStrategyType {
-	pub(crate) fn create_strategy(self) -> Result<Box<dyn PasswordStrategy>> {
-		match self {
-			#[cfg(feature = "argon2")]
-			Self::Argon2 => Ok(Box::new(argon2_strategy::Argon2Strategy::default())),
-			#[cfg(feature = "bcrypt")]
-			Self::Bcrypt => {
-				// bcrypt strategy not yet implemented
-				Err(crate::error::AuthError::InternalError(
-					"bcrypt password strategy is not yet implemented".to_string(),
-				))
-			}
-		}
-	}
+  pub(crate) fn create_strategy(self) -> Result<Box<dyn PasswordStrategy>> {
+    match self {
+      #[cfg(feature = "argon2")]
+      Self::Argon2 => Ok(Box::new(argon2_strategy::Argon2Strategy::default())),
+      #[cfg(feature = "bcrypt")]
+      Self::Bcrypt => {
+        // bcrypt strategy not yet implemented
+        Err(crate::error::AuthError::InternalError(
+          "bcrypt password strategy is not yet implemented".to_string(),
+        ))
+      }
+    }
+  }
 }

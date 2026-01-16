@@ -3,8 +3,10 @@ pub mod prelude;
 pub use auth::Auth;
 pub use builder::AuthBuilder;
 pub use error::{AuthError, Result};
-pub use operations::{Login, Logout, Register, Verify};
-pub use types::{Database, Session, User};
+pub use operations::{
+  Login, Logout, Register, ResendEmailVerification, SendEmailVerification, Verify, VerifyEmail,
+};
+pub use types::{Database, Session, User, VerificationToken};
 
 mod auth;
 mod builder;

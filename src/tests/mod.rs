@@ -9,6 +9,9 @@
 
 // Only compile tests when at least one database feature is enabled
 #[cfg(any(feature = "sqlite", feature = "postgres"))]
+mod email_verification_tests;
+
+#[cfg(any(feature = "sqlite", feature = "postgres"))]
 mod error_tests;
 
 #[cfg(any(feature = "sqlite", feature = "postgres"))]
