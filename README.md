@@ -324,15 +324,22 @@ auth.logout(Logout {
 
 #### Send Email Verification
 
-Generate a verification token for a user:
+Generate and optionally send a verification token for a user:
 
 ```rust
+// Option 1: Manual email handling (no EmailSender configured)
 let verification = auth.send_email_verification(SendEmailVerification {
     user_id: user.id.clone(),
 }).await?;
 
-// Send the token via email (application's responsibility)
+// You handle sending the email
 send_email(&verification.email, &verification.token).await?;
+
+// Option 2: Automatic email sending (with EmailSender configured)
+// Email is sent automatically, token still returned
+let verification = auth.send_email_verification(SendEmailVerification {
+    user_id: user.id.clone(),
+}).await?;
 ```
 
 **Returns:**
@@ -342,6 +349,7 @@ send_email(&verification.email, &verification.token).await?;
 **Errors:**
 - User not found
 - Email already verified
+- Email send failed (if EmailSender is configured)
 
 #### Verify Email
 
@@ -411,6 +419,160 @@ pub struct VerificationToken {
     pub expires_at: i64,
 }
 ```
+
+## Email Integration
+
+AuthKit provides a flexible email integration system that allows you to use any email service (SendGrid, AWS SES, SMTP, etc.) for sending verification emails, password reset emails, and other authentication-related emails.
+
+### Quick Start
+
+#### Option 1: Manual Email Handling (Default)
+
+By default, AuthKit generates tokens but doesn't send emails. You handle email sending:
+
+```rust
+let auth = Auth::builder()
+    .database(Database::sqlite("auth.db").await?)
+    .build()?;
+
+let verification = auth.send_email_verification(SendEmailVerification {
+    user_id: user.id,
+}).await?;
+
+// You send the email using your service
+your_email_service::send(&verification.email, &verification.token).await?;
+```
+
+#### Option 2: Automatic Email Sending
+
+Configure an `EmailSender` to send emails automatically:
+
+```rust
+use authkit::email::{EmailSender, EmailContext};
+use async_trait::async_trait;
+
+// Implement the EmailSender trait
+struct MyEmailSender {
+    api_key: String,
+}
+
+#[async_trait]
+impl EmailSender for MyEmailSender {
+    async fn send_verification_email(&self, context: EmailContext) -> Result<()> {
+        let url = format!("https://myapp.com/verify?token={}", context.token);
+        
+        // Use your email service (SendGrid, AWS SES, SMTP, etc.)
+        sendgrid::send(
+            &self.api_key,
+            &context.email,
+            "Verify your email",
+            &format!("Click here: {}", url),
+        ).await?;
+        
+        Ok(())
+    }
+}
+
+// Configure Auth with your email sender
+let auth = Auth::builder()
+    .database(Database::sqlite("auth.db").await?)
+    .email_sender(Box::new(MyEmailSender {
+        api_key: "your_api_key".to_string(),
+    }))
+    .build()?;
+
+// Now emails are sent automatically
+auth.send_email_verification(SendEmailVerification {
+    user_id: user.id,
+}).await?;
+```
+
+### EmailSender Trait
+
+```rust
+#[async_trait]
+pub trait EmailSender: Send + Sync {
+    async fn send_verification_email(&self, context: EmailContext) -> Result<()>;
+}
+
+pub struct EmailContext {
+    pub email: String,      // Recipient's email
+    pub token: String,      // Verification token (plaintext)
+    pub expires_at: i64,    // Unix timestamp
+}
+```
+
+### Example Implementations
+
+#### Console Logger (Development)
+
+```rust
+struct ConsoleEmailSender {
+    base_url: String,
+}
+
+#[async_trait]
+impl EmailSender for ConsoleEmailSender {
+    async fn send_verification_email(&self, context: EmailContext) -> Result<()> {
+        println!("📧 Verify at: {}/verify?token={}", self.base_url, context.token);
+        Ok(())
+    }
+}
+```
+
+#### SendGrid (Production)
+
+```rust
+struct SendGridEmailSender {
+    api_key: String,
+    from_email: String,
+    base_url: String,
+}
+
+#[async_trait]
+impl EmailSender for SendGridEmailSender {
+    async fn send_verification_email(&self, context: EmailContext) -> Result<()> {
+        let url = format!("{}/verify?token={}", self.base_url, context.token);
+        
+        let client = reqwest::Client::new();
+        client
+            .post("https://api.sendgrid.com/v3/mail/send")
+            .header("Authorization", format!("Bearer {}", self.api_key))
+            .json(&serde_json::json!({
+                "personalizations": [{"to": [{"email": context.email}]}],
+                "from": {"email": self.from_email},
+                "subject": "Verify your email",
+                "content": [{
+                    "type": "text/html",
+                    "value": format!("<a href='{}'>Verify Email</a>", url)
+                }]
+            }))
+            .send()
+            .await?;
+        
+        Ok(())
+    }
+}
+```
+
+### Environment-Based Configuration
+
+```rust
+fn create_email_sender(env: &str) -> Box<dyn EmailSender> {
+    match env {
+        "production" => Box::new(SendGridEmailSender { /* ... */ }),
+        "development" => Box::new(ConsoleEmailSender { /* ... */ }),
+        _ => panic!("Unknown environment"),
+    }
+}
+
+let auth = Auth::builder()
+    .database(database)
+    .email_sender(create_email_sender(&env))
+    .build()?;
+```
+
+**For detailed email integration guide, see [docs/EMAIL_INTEGRATION.md](docs/EMAIL_INTEGRATION.md).**
 
 ## Security
 
@@ -484,6 +646,7 @@ match auth.login(login_request).await {
 Check the `examples/` directory for more usage examples:
 
 - `email_verification.rs` - Complete email verification workflow
+- `email_sender.rs` - Custom email sender implementations (SendGrid, AWS SES, SMTP, etc.)
 - `basic.rs` - Simple registration and login flow (planned)
 - `web_server.rs` - Integration with Axum (planned)
 - `cli_tool.rs` - CLI authentication example (planned)
@@ -492,6 +655,7 @@ Run an example:
 
 ```bash
 cargo run --example email_verification --features sqlite
+cargo run --example email_sender --features sqlite
 ```
 
 ## Testing

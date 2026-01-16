@@ -1,4 +1,5 @@
 use crate::database::DatabaseTrait;
+use crate::email::EmailSender;
 use crate::error::Result;
 use crate::operations::email_verification::{
   ResendEmailVerification, SendEmailVerification, VerifyEmail,
@@ -21,6 +22,7 @@ pub(crate) struct AuthInner {
   pub(crate) session_strategy: Box<dyn SessionStrategy>,
   #[allow(dead_code)]
   pub(crate) token_strategy: Box<dyn TokenStrategy>,
+  pub(crate) email_sender: Option<Arc<Box<dyn EmailSender>>>,
 }
 
 impl std::fmt::Debug for AuthInner {

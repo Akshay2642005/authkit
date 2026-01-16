@@ -49,6 +49,12 @@ pub enum AuthError {
 
   #[error("Token Expired: {0}")]
   TokenExpired(String),
+
+  #[error("Email send failed: {0}")]
+  EmailSendFailed(String),
+
+  #[error("Rate limit exceeded: {0}")]
+  RateLimitExceeded(String),
 }
 
 pub type Result<T> = std::result::Result<T, AuthError>;

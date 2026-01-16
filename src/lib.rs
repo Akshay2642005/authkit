@@ -1,7 +1,9 @@
+pub mod email;
 pub mod prelude;
 
 pub use auth::Auth;
 pub use builder::AuthBuilder;
+pub use email::{EmailContext, EmailSender};
 pub use error::{AuthError, Result};
 pub use operations::{
   Login, Logout, Register, ResendEmailVerification, SendEmailVerification, Verify, VerifyEmail,

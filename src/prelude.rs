@@ -1,5 +1,6 @@
 pub use crate::auth::Auth;
 pub use crate::builder::AuthBuilder;
+pub use crate::email::{EmailContext, EmailSender};
 pub use crate::error::{AuthError, Result};
 pub use crate::operations::{
   Login, Logout, Register, ResendEmailVerification, SendEmailVerification, Verify, VerifyEmail,

@@ -1,0 +1,19 @@
+[default]
+port = 8000
+address = "0.0.0.0"
+log_level = "normal"
+workers = 4
+
+[default.limits]
+json = "1 MiB"
+
+[debug]
+port = 8000
+address = "127.0.0.1"
+log_level = "debug"
+
+[release]
+port = 8000
+address = "0.0.0.0"
+log_level = "critical"
+workers = 12

@@ -1,4 +1,5 @@
 use crate::auth::Auth;
+use crate::email::EmailContext;
 use crate::error::{AuthError, Result};
 use crate::strategies::token::TokenType;
 use crate::types::{User, VerificationToken};
@@ -62,6 +63,17 @@ pub(crate) async fn send_email_verification(
       TWENTY_FOUR_HOURS,
     )
     .await?;
+
+  // If an email sender is configured, send the email
+  if let Some(email_sender) = &auth.inner.email_sender {
+    let context = EmailContext {
+      email: user.email.clone(),
+      token: token.token.clone(),
+      expires_at: token.expires_at,
+    };
+
+    email_sender.send_verification_email(context).await?;
+  }
 
   Ok(VerificationToken {
     token: token.token,
@@ -166,6 +178,17 @@ pub(crate) async fn resend_email_verification(
       TWENTY_FOUR_HOURS,
     )
     .await?;
+
+  // If an email sender is configured, send the email
+  if let Some(email_sender) = &auth.inner.email_sender {
+    let context = EmailContext {
+      email: db_user.email.clone(),
+      token: token.token.clone(),
+      expires_at: token.expires_at,
+    };
+
+    email_sender.send_verification_email(context).await?;
+  }
 
   Ok(VerificationToken {
     token: token.token,
