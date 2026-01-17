@@ -26,6 +26,10 @@ pub(crate) async fn execute(auth: &Auth, request: Login) -> Result<Session> {
     return Err(AuthError::InvalidCredentials);
   }
 
+  if !user.email_verified {
+    return Err(AuthError::EmailNotVerified(user.email.clone()));
+  }
+
   let token = crate::security::tokens::generate_token();
 
   let expires_at = std::time::SystemTime::now()
