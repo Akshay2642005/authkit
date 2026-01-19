@@ -8,7 +8,7 @@
 
 use crate::error::AuthError;
 use crate::prelude::*;
-use crate::tests::integration_tests::setup_test_auth;
+use crate::tests::integration_tests::{setup_test_auth, setup_test_auth_with_email_verification};
 
 #[tokio::test]
 async fn test_builder_missing_database() {
@@ -232,6 +232,7 @@ async fn test_double_logout() {
 async fn test_verify_after_logout() {
   let auth = setup_test_auth().await.unwrap();
 
+  // Register and login
   auth
     .register(Register {
       email: "verify@example.com".into(),
@@ -442,4 +443,33 @@ async fn test_auth_is_sync() {
   // Compile-time check that Auth implements Sync
   fn assert_sync<T: Sync>() {}
   assert_sync::<Auth>();
+}
+
+#[tokio::test]
+async fn test_login_with_email_verification_required() {
+  // Use auth that requires email verification
+  let auth = setup_test_auth_with_email_verification().await.unwrap();
+
+  // Register user (no verification)
+  auth
+    .register(Register {
+      email: "unverified@example.com".into(),
+      password: "SecurePass123".into(),
+    })
+    .await
+    .unwrap();
+
+  // Login should fail with EmailNotVerified
+  let result = auth
+    .login(Login {
+      email: "unverified@example.com".into(),
+      password: "SecurePass123".into(),
+    })
+    .await;
+
+  assert!(result.is_err());
+  assert!(matches!(
+    result.unwrap_err(),
+    AuthError::EmailNotVerified(_)
+  ));
 }

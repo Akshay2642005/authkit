@@ -26,7 +26,8 @@ pub(crate) async fn execute(auth: &Auth, request: Login) -> Result<Session> {
     return Err(AuthError::InvalidCredentials);
   }
 
-  if !user.email_verified {
+  // Only check email verification if configured to require it
+  if auth.inner.require_email_verification && !user.email_verified {
     return Err(AuthError::EmailNotVerified(user.email.clone()));
   }
 

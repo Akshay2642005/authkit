@@ -4,6 +4,9 @@ use crate::error::{AuthError, Result};
 use crate::strategies::token::TokenType;
 use crate::types::{User, VerificationToken};
 
+#[cfg(feature = "email-queue")]
+use crate::email_job::EmailJob;
+
 /// Request to send an email verification token
 ///
 /// This generates a verification token for the specified user and returns it.
@@ -64,7 +67,34 @@ pub(crate) async fn send_email_verification(
     )
     .await?;
 
-  // If an email sender is configured, send the email
+  // Send verification email (queue or sync based on configuration)
+  #[cfg(feature = "email-queue")]
+  {
+    if let Some(queue) = &auth.inner.email_queue {
+      let job = EmailJob::verification(
+        user.email.clone(),
+        token.token.clone(),
+        token.expires_at,
+        user.id.clone(),
+      );
+
+      match queue.enqueue(job).await {
+        Ok(()) => {
+          return Ok(VerificationToken {
+            token: token.token,
+            email: user.email,
+            expires_at: token.expires_at,
+          });
+        }
+        Err(e) => {
+          log::warn!("Email queue error, sending synchronously: {}", e);
+          // Fall through to sync send
+        }
+      }
+    }
+  }
+
+  // Synchronous send (fallback or when queue not enabled)
   if let Some(email_sender) = &auth.inner.email_sender {
     let context = EmailContext {
       email: user.email.clone(),
@@ -179,7 +209,34 @@ pub(crate) async fn resend_email_verification(
     )
     .await?;
 
-  // If an email sender is configured, send the email
+  // Send verification email (queue or sync based on configuration)
+  #[cfg(feature = "email-queue")]
+  {
+    if let Some(queue) = &auth.inner.email_queue {
+      let job = EmailJob::verification(
+        db_user.email.clone(),
+        token.token.clone(),
+        token.expires_at,
+        db_user.id.clone(),
+      );
+
+      match queue.enqueue(job).await {
+        Ok(()) => {
+          return Ok(VerificationToken {
+            token: token.token,
+            email: db_user.email,
+            expires_at: token.expires_at,
+          });
+        }
+        Err(e) => {
+          log::warn!("Email queue error, sending synchronously: {}", e);
+          // Fall through to sync send
+        }
+      }
+    }
+  }
+
+  // Synchronous send (fallback or when queue not enabled)
   if let Some(email_sender) = &auth.inner.email_sender {
     let context = EmailContext {
       email: db_user.email.clone(),
