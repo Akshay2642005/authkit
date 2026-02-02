@@ -33,6 +33,8 @@ argon2 = ["dep:argon2", "dep:password-hash"]
 bcrypt = ["dep:bcrypt"]
 jwt = ["dep:jsonwebtoken"]
 
+email-queue = []
+
 [dependencies]
 tokio = { version = "1.28", features = ["full"] }
 async-trait = "0.1"
@@ -48,3 +50,4 @@ thiserror = "2.0.17"
 regex = "1.10"
 hex = "0.4"
 sha2 = "0.10.9"
+log = "0.4.29"

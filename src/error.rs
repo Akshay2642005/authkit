@@ -55,6 +55,9 @@ pub enum AuthError {
 
   #[error("Rate limit exceeded: {0}")]
   RateLimitExceeded(String),
+
+  #[error("Email Not verified: {0}")]
+  EmailNotVerified(String),
 }
 
 pub type Result<T> = std::result::Result<T, AuthError>;

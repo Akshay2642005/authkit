@@ -23,6 +23,7 @@ use rocket::http::Status;
 use rocket::response::status::Custom;
 use rocket::serde::json::Json;
 use rocket::{launch, routes};
+use sqlx::Executor;
 
 /// Application state containing the Auth instance
 pub struct AppState {
@@ -134,10 +135,14 @@ async fn rocket() -> _ {
     .build()
     .expect("Failed to build Auth");
 
-  // Run migrations
-  println!("📦 Running database migrations...");
-  auth.migrate().await.expect("Failed to run migrations");
-  println!("✅ Migrations complete\n");
+  // Note: In production, run migrations via CLI before starting the server:
+  //   authkit migrate --db-url sqlite://auth.db
+  // For this demo, we set up the schema inline
+  println!("📦 Setting up database schema...");
+  setup_demo_schema(&database)
+    .await
+    .expect("Failed to set up schema");
+  println!("✅ Schema setup complete\n");
 
   println!("🔐 AuthKit initialized successfully");
   println!("🌐 Server starting on http://localhost:8000\n");
@@ -177,4 +182,82 @@ async fn rocket() -> _ {
       ],
     )
     .register("/", rocket::catchers![not_found, internal_error])
+}
+
+/// Set up database schema for this demo
+/// In production, use the CLI: `authkit migrate --db-url sqlite://auth.db`
+async fn setup_demo_schema(db: &Database) -> std::result::Result<(), Box<dyn std::error::Error>> {
+  let pool = match &db.inner {
+    authkit::types::DatabaseInner::Sqlite(sqlite_db) => &sqlite_db.pool,
+    #[allow(unreachable_patterns)]
+    _ => panic!("This example requires SQLite"),
+  };
+
+  pool
+    .execute(
+      r#"
+      CREATE TABLE IF NOT EXISTS users (
+        id TEXT PRIMARY KEY,
+        email TEXT NOT NULL UNIQUE,
+        name TEXT,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL,
+        email_verified INTEGER NOT NULL DEFAULT 0,
+        email_verified_at INTEGER
+      )
+      "#,
+    )
+    .await?;
+
+  pool
+    .execute(
+      r#"
+      CREATE TABLE IF NOT EXISTS accounts (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        provider TEXT NOT NULL,
+        provider_account_id TEXT NOT NULL,
+        password_hash TEXT,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL,
+        UNIQUE(provider, provider_account_id)
+      )
+      "#,
+    )
+    .await?;
+
+  pool
+    .execute(
+      r#"
+      CREATE TABLE IF NOT EXISTS sessions (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        token TEXT NOT NULL UNIQUE,
+        expires_at INTEGER NOT NULL,
+        created_at INTEGER NOT NULL,
+        ip_address TEXT,
+        user_agent TEXT
+      )
+      "#,
+    )
+    .await?;
+
+  pool
+    .execute(
+      r#"
+      CREATE TABLE IF NOT EXISTS verification (
+        id TEXT PRIMARY KEY,
+        user_id TEXT REFERENCES users(id) ON DELETE CASCADE,
+        identifier TEXT NOT NULL,
+        token_hash TEXT NOT NULL UNIQUE,
+        token_type TEXT NOT NULL,
+        expires_at INTEGER NOT NULL,
+        created_at INTEGER NOT NULL,
+        used_at INTEGER
+      )
+      "#,
+    )
+    .await?;
+
+  Ok(())
 }

@@ -3,9 +3,14 @@
 //! This example demonstrates how to implement a custom email sender for AuthKit.
 //! You can use any email service you prefer: SendGrid, AWS SES, SMTP, Resend, etc.
 
+//!
+//! **Note:** In production, run `authkit migrate --db-url <URL>` to set up the database schema.
+//! This example uses inline SQL for demonstration with in-memory SQLite.
+
 use async_trait::async_trait;
 use authkit::email::{EmailContext, EmailSender};
 use authkit::prelude::*;
+use sqlx::Executor;
 
 // ============================================================================
 // Example 1: Simple Console Email Sender (for testing)
@@ -232,11 +237,10 @@ async fn main() -> Result<()> {
   // Example 1: Without custom email sender (manual handling)
   println!("=== Example 1: Manual Email Handling ===\n");
   {
-    let auth = Auth::builder()
-      .database(Database::sqlite(":memory:").await?)
-      .build()?;
+    let db = Database::sqlite(":memory:").await?;
+    setup_demo_schema(&db).await?;
 
-    auth.migrate().await?;
+    let auth = Auth::builder().database(db).build()?;
 
     // Register user
     let user = auth
@@ -260,14 +264,15 @@ async fn main() -> Result<()> {
   // Example 2: With ConsoleEmailSender (development)
   println!("=== Example 2: Console Email Sender ===\n");
   {
+    let db = Database::sqlite(":memory:").await?;
+    setup_demo_schema(&db).await?;
+
     let auth = Auth::builder()
-      .database(Database::sqlite(":memory:").await?)
+      .database(db)
       .email_sender(Box::new(ConsoleEmailSender {
         base_url: "http://localhost:3000".to_string(),
       }))
       .build()?;
-
-    auth.migrate().await?;
 
     let user = auth
       .register(Register {
@@ -289,8 +294,11 @@ async fn main() -> Result<()> {
   // Example 3: With SendGrid (production)
   println!("=== Example 3: SendGrid Email Sender ===\n");
   {
+    let db = Database::sqlite(":memory:").await?;
+    setup_demo_schema(&db).await?;
+
     let auth = Auth::builder()
-      .database(Database::sqlite(":memory:").await?)
+      .database(db)
       .email_sender(Box::new(SendGridEmailSender {
         api_key: std::env::var("SENDGRID_API_KEY").unwrap_or_else(|_| "sg_test_key".to_string()),
         from_email: "noreply@myapp.com".to_string(),
@@ -298,8 +306,6 @@ async fn main() -> Result<()> {
         base_url: "https://myapp.com".to_string(),
       }))
       .build()?;
-
-    auth.migrate().await?;
 
     let user = auth
       .register(Register {
@@ -320,14 +326,15 @@ async fn main() -> Result<()> {
   // Example 4: Resending verification
   println!("=== Example 4: Resend Verification ===\n");
   {
+    let db = Database::sqlite(":memory:").await?;
+    setup_demo_schema(&db).await?;
+
     let auth = Auth::builder()
-      .database(Database::sqlite(":memory:").await?)
+      .database(db)
       .email_sender(Box::new(ConsoleEmailSender {
         base_url: "http://localhost:3000".to_string(),
       }))
       .build()?;
-
-    auth.migrate().await?;
 
     auth
       .register(Register {
@@ -347,6 +354,84 @@ async fn main() -> Result<()> {
   }
 
   println!("All examples completed successfully!");
+  Ok(())
+}
+
+/// Set up database schema for this demo
+/// In production, use the CLI: `authkit migrate --db-url <URL>`
+async fn setup_demo_schema(db: &Database) -> Result<()> {
+  let pool = match &db.inner {
+    authkit::types::DatabaseInner::Sqlite(sqlite_db) => &sqlite_db.pool,
+    #[allow(unreachable_patterns)]
+    _ => panic!("This example requires SQLite"),
+  };
+
+  pool
+    .execute(
+      r#"
+      CREATE TABLE IF NOT EXISTS users (
+        id TEXT PRIMARY KEY,
+        email TEXT NOT NULL UNIQUE,
+        name TEXT,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL,
+        email_verified INTEGER NOT NULL DEFAULT 0,
+        email_verified_at INTEGER
+      )
+      "#,
+    )
+    .await?;
+
+  pool
+    .execute(
+      r#"
+      CREATE TABLE IF NOT EXISTS accounts (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        provider TEXT NOT NULL,
+        provider_account_id TEXT NOT NULL,
+        password_hash TEXT,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL,
+        UNIQUE(provider, provider_account_id)
+      )
+      "#,
+    )
+    .await?;
+
+  pool
+    .execute(
+      r#"
+      CREATE TABLE IF NOT EXISTS sessions (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        token TEXT NOT NULL UNIQUE,
+        expires_at INTEGER NOT NULL,
+        created_at INTEGER NOT NULL,
+        ip_address TEXT,
+        user_agent TEXT
+      )
+      "#,
+    )
+    .await?;
+
+  pool
+    .execute(
+      r#"
+      CREATE TABLE IF NOT EXISTS verification (
+        id TEXT PRIMARY KEY,
+        user_id TEXT REFERENCES users(id) ON DELETE CASCADE,
+        identifier TEXT NOT NULL,
+        token_hash TEXT NOT NULL UNIQUE,
+        token_type TEXT NOT NULL,
+        expires_at INTEGER NOT NULL,
+        created_at INTEGER NOT NULL,
+        used_at INTEGER
+      )
+      "#,
+    )
+    .await?;
+
   Ok(())
 }
 

@@ -4,10 +4,14 @@
 //! for automatic email verification flow.
 //!
 //! Run with: cargo run --example email_verification_with_sender --features sqlite
+//!
+//! **Note:** In production, run `authkit migrate --db-url <URL>` to set up the database schema.
+//! This example uses inline SQL for demonstration with in-memory SQLite.
 
 use async_trait::async_trait;
 use authkit::email::{EmailContext, EmailSender};
 use authkit::prelude::*;
+use sqlx::Executor;
 
 /// A simple email sender that prints emails to the console
 /// Perfect for development and testing
@@ -37,18 +41,21 @@ impl EmailSender for ConsoleEmailSender {
 async fn main() -> Result<()> {
   println!("🔐 AuthKit - Email Verification with Custom Sender Example\n");
 
+  // Create database and set up schema
+  let db = Database::sqlite(":memory:").await?;
+
+  // Set up schema inline for demo (in production, use: authkit migrate --db-url <URL>)
+  println!("📦 Setting up database schema...");
+  setup_demo_schema(&db).await?;
+  println!("✅ Schema setup complete\n");
+
   // Create Auth instance with custom email sender
   let auth = Auth::builder()
-    .database(Database::sqlite(":memory:").await?)
+    .database(db)
     .email_sender(Box::new(ConsoleEmailSender {
       base_url: "http://localhost:3000".to_string(),
     }))
     .build()?;
-
-  // Run migrations
-  println!("📦 Running database migrations...");
-  auth.migrate().await?;
-  println!("✅ Migrations complete\n");
 
   // Step 1: Register a new user
   println!("👤 Registering new user...");
@@ -165,6 +172,84 @@ async fn main() -> Result<()> {
   println!("   3. Tokens are single-use and expire after 24 hours");
   println!("   4. Verified emails cannot be re-verified");
   println!("   5. Resend generates new tokens and invalidates old ones");
+
+  Ok(())
+}
+
+/// Set up database schema for this demo
+/// In production, use the CLI: `authkit migrate --db-url <URL>`
+async fn setup_demo_schema(db: &Database) -> Result<()> {
+  let pool = match &db.inner {
+    authkit::types::DatabaseInner::Sqlite(sqlite_db) => &sqlite_db.pool,
+    #[allow(unreachable_patterns)]
+    _ => panic!("This example requires SQLite"),
+  };
+
+  pool
+    .execute(
+      r#"
+      CREATE TABLE IF NOT EXISTS users (
+        id TEXT PRIMARY KEY,
+        email TEXT NOT NULL UNIQUE,
+        name TEXT,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL,
+        email_verified INTEGER NOT NULL DEFAULT 0,
+        email_verified_at INTEGER
+      )
+      "#,
+    )
+    .await?;
+
+  pool
+    .execute(
+      r#"
+      CREATE TABLE IF NOT EXISTS accounts (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        provider TEXT NOT NULL,
+        provider_account_id TEXT NOT NULL,
+        password_hash TEXT,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL,
+        UNIQUE(provider, provider_account_id)
+      )
+      "#,
+    )
+    .await?;
+
+  pool
+    .execute(
+      r#"
+      CREATE TABLE IF NOT EXISTS sessions (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        token TEXT NOT NULL UNIQUE,
+        expires_at INTEGER NOT NULL,
+        created_at INTEGER NOT NULL,
+        ip_address TEXT,
+        user_agent TEXT
+      )
+      "#,
+    )
+    .await?;
+
+  pool
+    .execute(
+      r#"
+      CREATE TABLE IF NOT EXISTS verification (
+        id TEXT PRIMARY KEY,
+        user_id TEXT REFERENCES users(id) ON DELETE CASCADE,
+        identifier TEXT NOT NULL,
+        token_hash TEXT NOT NULL UNIQUE,
+        token_type TEXT NOT NULL,
+        expires_at INTEGER NOT NULL,
+        created_at INTEGER NOT NULL,
+        used_at INTEGER
+      )
+      "#,
+    )
+    .await?;
 
   Ok(())
 }

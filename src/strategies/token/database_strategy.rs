@@ -6,10 +6,10 @@ use async_trait::async_trait;
 
 /// Database-backed token strategy
 ///
-/// This strategy stores tokens in the database and handles:
+/// This strategy stores tokens in the verification table and handles:
 /// - Email verification tokens
-/// - Password reset tokens (future)
-/// - Magic link tokens (future)
+/// - Password reset tokens
+/// - Magic link tokens
 pub(crate) struct DatabaseTokenStrategy;
 
 impl DatabaseTokenStrategy {
@@ -29,6 +29,7 @@ impl TokenStrategy for DatabaseTokenStrategy {
     &self,
     db: &dyn DatabaseTrait,
     user_id: &str,
+    identifier: &str,
     token_type: TokenType,
     expires_in_seconds: i64,
   ) -> Result<Token> {
@@ -44,10 +45,11 @@ impl TokenStrategy for DatabaseTokenStrategy {
 
     let expires_at = now + expires_in_seconds;
 
-    // Store token in database
-    db.create_token(
+    // Store token in verification table
+    db.create_verification(
       &id,
-      user_id,
+      Some(user_id),
+      identifier,
       &token_hash,
       token_type.as_str(),
       expires_at,
@@ -57,7 +59,8 @@ impl TokenStrategy for DatabaseTokenStrategy {
 
     Ok(Token {
       id,
-      user_id: user_id.to_string(),
+      user_id: Some(user_id.to_string()),
+      identifier: identifier.to_string(),
       token_hash,
       token,
       token_type,
@@ -74,9 +77,9 @@ impl TokenStrategy for DatabaseTokenStrategy {
   ) -> Result<VerifiedToken> {
     let token_hash = Self::hash_token(token);
 
-    // Find token in database
+    // Find token in verification table
     let db_token = db
-      .find_token(&token_hash, token_type.as_str())
+      .find_verification(&token_hash, token_type.as_str())
       .await?
       .ok_or_else(|| AuthError::InvalidToken("Token not found or invalid".to_string()))?;
 
@@ -100,6 +103,7 @@ impl TokenStrategy for DatabaseTokenStrategy {
     Ok(VerifiedToken {
       id: db_token.id,
       user_id: db_token.user_id,
+      identifier: db_token.identifier,
       token_type,
     })
   }
@@ -111,11 +115,11 @@ impl TokenStrategy for DatabaseTokenStrategy {
       .unwrap()
       .as_secs() as i64;
 
-    db.mark_token_used(&token_hash, now).await
+    db.mark_verification_used(&token_hash, now).await
   }
 
   async fn clean_expired_tokens(&self, db: &dyn DatabaseTrait) -> Result<()> {
-    db.delete_expired_tokens().await?;
+    db.delete_expired_verifications().await?;
     Ok(())
   }
 }

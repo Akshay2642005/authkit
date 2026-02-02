@@ -7,6 +7,10 @@
 //! - Session management
 //! - Security features
 
+// Test helpers for setting up database schemas
+#[cfg(any(feature = "sqlite", feature = "postgres"))]
+pub(crate) mod test_helpers;
+
 // Only compile tests when at least one database feature is enabled
 #[cfg(any(feature = "sqlite", feature = "postgres"))]
 mod email_verification_tests;

@@ -2,16 +2,19 @@
 //!
 //! These tests cover the complete lifecycle:
 //! - User registration
+//! - Email verification (optional)
 //! - Login and session creation
 //! - Session verification
 //! - Logout and session invalidation
 //! - Error scenarios
 
 use crate::prelude::*;
+use crate::tests::test_helpers::setup_test_schema;
 use crate::types::Database;
 
 /// Helper function to set up a test Auth instance with in-memory database
 /// Uses SQLite by default, or Postgres if only postgres feature is enabled
+/// Note: By default, email verification is NOT required for login
 pub(crate) async fn setup_test_auth() -> Result<Auth> {
   #[cfg(all(
     feature = "sqlite",
@@ -22,10 +25,10 @@ pub(crate) async fn setup_test_auth() -> Result<Auth> {
     let db_name = ":memory:".to_string();
     let db = Database::sqlite(&db_name).await?;
 
-    let auth = Auth::builder().database(db).build()?;
+    // Set up schema for testing (includes email_verification columns)
+    setup_test_schema(&db).await?;
 
-    // Run migrations
-    auth.migrate().await?;
+    let auth = Auth::builder().database(db).build()?;
 
     Ok(auth)
   }
@@ -38,13 +41,83 @@ pub(crate) async fn setup_test_auth() -> Result<Auth> {
       .unwrap_or_else(|_| "postgres://postgres:postgres@localhost/authkit_test".to_string());
     let db = Database::postgres(&db_url).await?;
 
-    let auth = Auth::builder().database(db).build()?;
+    // Set up schema for testing (includes email_verification columns)
+    setup_test_schema(&db).await?;
 
-    // Run migrations
-    auth.migrate().await?;
+    let auth = Auth::builder().database(db).build()?;
 
     Ok(auth)
   }
+}
+
+/// Helper function to set up a test Auth instance that REQUIRES email verification for login
+pub(crate) async fn setup_test_auth_with_email_verification() -> Result<Auth> {
+  #[cfg(all(
+    feature = "sqlite",
+    not(all(feature = "postgres", not(feature = "sqlite")))
+  ))]
+  {
+    let db_name = ":memory:".to_string();
+    let db = Database::sqlite(&db_name).await?;
+
+    // Set up schema for testing (includes email_verification columns)
+    setup_test_schema(&db).await?;
+
+    let auth = Auth::builder()
+      .database(db)
+      .require_email_verification(true)
+      .build()?;
+
+    Ok(auth)
+  }
+
+  #[cfg(all(feature = "postgres", not(feature = "sqlite")))]
+  {
+    let db_url = std::env::var("DATABASE_URL")
+      .unwrap_or_else(|_| "postgres://postgres:postgres@localhost/authkit_test".to_string());
+    let db = Database::postgres(&db_url).await?;
+
+    // Set up schema for testing (includes email_verification columns)
+    setup_test_schema(&db).await?;
+
+    let auth = Auth::builder()
+      .database(db)
+      .require_email_verification(true)
+      .build()?;
+
+    Ok(auth)
+  }
+}
+
+/// Helper function to register a user and verify their email
+/// Useful for tests that require a verified user
+pub(crate) async fn register_and_verify_user(
+  auth: &Auth,
+  email: &str,
+  password: &str,
+) -> Result<User> {
+  // Register user
+  let user = auth
+    .register(Register {
+      name: None,
+      email: email.into(),
+      password: password.into(),
+    })
+    .await?;
+
+  // Send email verification token
+  let token = auth
+    .send_email_verification(SendEmailVerification {
+      user_id: user.id.clone(),
+    })
+    .await?;
+
+  // Verify the email
+  auth
+    .verify_email(VerifyEmail { token: token.token })
+    .await?;
+
+  Ok(user)
 }
 
 #[tokio::test]
@@ -53,6 +126,7 @@ async fn test_register_user_success() {
 
   let result = auth
     .register(Register {
+      name: None,
       email: "test@example.com".into(),
       password: "SecurePass123".into(),
     })
@@ -72,6 +146,7 @@ async fn test_register_duplicate_email() {
   // Register first user
   auth
     .register(Register {
+      name: None,
       email: "duplicate@example.com".into(),
       password: "SecurePass123".into(),
     })
@@ -81,6 +156,7 @@ async fn test_register_duplicate_email() {
   // Try to register with same email
   let result = auth
     .register(Register {
+      name: None,
       email: "duplicate@example.com".into(),
       password: "AnotherPass123".into(),
     })
@@ -99,6 +175,7 @@ async fn test_register_invalid_email() {
 
   let result = auth
     .register(Register {
+      name: None,
       email: "not-an-email".into(),
       password: "SecurePass123".into(),
     })
@@ -114,6 +191,7 @@ async fn test_register_weak_password() {
 
   let result = auth
     .register(Register {
+      name: None,
       email: "test@example.com".into(),
       password: "weak".into(),
     })
@@ -127,18 +205,21 @@ async fn test_register_weak_password() {
 async fn test_login_success() {
   let auth = setup_test_auth().await.unwrap();
 
-  // Register user
+  // Register user (no email verification required by default)
   let user = auth
     .register(Register {
+      name: None,
       email: "login@example.com".into(),
       password: "SecurePass123".into(),
     })
     .await
     .unwrap();
 
-  // Login
+  // Login should succeed without email verification
   let result = auth
     .login(Login {
+      ip_address: None,
+      user_agent: None,
       email: "login@example.com".into(),
       password: "SecurePass123".into(),
     })
@@ -152,12 +233,70 @@ async fn test_login_success() {
 }
 
 #[tokio::test]
+async fn test_login_requires_email_verification_when_configured() {
+  // Use auth configured to require email verification
+  let auth = setup_test_auth_with_email_verification().await.unwrap();
+
+  // Register user but don't verify email
+  auth
+    .register(Register {
+      name: None,
+      email: "unverified@example.com".into(),
+      password: "SecurePass123".into(),
+    })
+    .await
+    .unwrap();
+
+  // Try to login without email verification - should fail
+  let result = auth
+    .login(Login {
+      ip_address: None,
+      user_agent: None,
+      email: "unverified@example.com".into(),
+      password: "SecurePass123".into(),
+    })
+    .await;
+
+  assert!(result.is_err());
+  assert!(matches!(
+    result.unwrap_err(),
+    AuthError::EmailNotVerified(_)
+  ));
+}
+
+#[tokio::test]
+async fn test_login_succeeds_after_verification_when_required() {
+  // Use auth configured to require email verification
+  let auth = setup_test_auth_with_email_verification().await.unwrap();
+
+  // Register and verify user
+  register_and_verify_user(&auth, "verified@example.com", "SecurePass123")
+    .await
+    .unwrap();
+
+  // Login should succeed after verification
+  let result = auth
+    .login(Login {
+      ip_address: None,
+      user_agent: None,
+      email: "verified@example.com".into(),
+      password: "SecurePass123".into(),
+    })
+    .await;
+
+  assert!(result.is_ok());
+  let session = result.unwrap();
+  assert!(!session.token.is_empty());
+}
+
+#[tokio::test]
 async fn test_login_wrong_password() {
   let auth = setup_test_auth().await.unwrap();
 
   // Register user
   auth
     .register(Register {
+      name: None,
       email: "test@example.com".into(),
       password: "SecurePass123".into(),
     })
@@ -167,6 +306,8 @@ async fn test_login_wrong_password() {
   // Try to login with wrong password
   let result = auth
     .login(Login {
+      ip_address: None,
+      user_agent: None,
       email: "test@example.com".into(),
       password: "WrongPass123".into(),
     })
@@ -182,6 +323,8 @@ async fn test_login_nonexistent_user() {
 
   let result = auth
     .login(Login {
+      ip_address: None,
+      user_agent: None,
       email: "nonexistent@example.com".into(),
       password: "SecurePass123".into(),
     })
@@ -198,6 +341,7 @@ async fn test_verify_session_success() {
   // Register and login
   let user = auth
     .register(Register {
+      name: None,
       email: "verify@example.com".into(),
       password: "SecurePass123".into(),
     })
@@ -206,6 +350,8 @@ async fn test_verify_session_success() {
 
   let session = auth
     .login(Login {
+      ip_address: None,
+      user_agent: None,
       email: "verify@example.com".into(),
       password: "SecurePass123".into(),
     })
@@ -238,6 +384,7 @@ async fn test_logout_success() {
   // Register and login
   auth
     .register(Register {
+      name: None,
       email: "logout@example.com".into(),
       password: "SecurePass123".into(),
     })
@@ -246,6 +393,8 @@ async fn test_logout_success() {
 
   let session = auth
     .login(Login {
+      ip_address: None,
+      user_agent: None,
       email: "logout@example.com".into(),
       password: "SecurePass123".into(),
     })
@@ -284,29 +433,103 @@ async fn test_full_auth_lifecycle() {
   // 1. Register
   let user = auth
     .register(Register {
+      name: None,
       email: "lifecycle@example.com".into(),
       password: "SecurePass123".into(),
     })
     .await
     .unwrap();
 
-  // 2. Login
+  // 2. Login (works without verification by default)
   let session = auth
     .login(Login {
+      ip_address: None,
+      user_agent: None,
       email: "lifecycle@example.com".into(),
       password: "SecurePass123".into(),
     })
     .await
     .unwrap();
 
-  // 3. Verify
-  let verified_user = auth.verify(Verify::new(&session.token)).await.unwrap();
-  assert_eq!(verified_user.id, user.id);
+  // 3. Verify session
+  let session_user = auth.verify(Verify::new(&session.token)).await.unwrap();
+  assert_eq!(session_user.id, user.id);
 
   // 4. Logout
   auth.logout(Logout::new(&session.token)).await.unwrap();
 
   // 5. Verify session is invalid
+  assert!(auth.verify(Verify::new(&session.token)).await.is_err());
+}
+
+#[tokio::test]
+async fn test_full_auth_lifecycle_with_email_verification() {
+  // Use auth that requires email verification
+  let auth = setup_test_auth_with_email_verification().await.unwrap();
+
+  // 1. Register
+  let user = auth
+    .register(Register {
+      name: None,
+      email: "lifecycle@example.com".into(),
+      password: "SecurePass123".into(),
+    })
+    .await
+    .unwrap();
+
+  assert!(!user.email_verified);
+
+  // 2. Cannot login without verification
+  let login_result = auth
+    .login(Login {
+      ip_address: None,
+      user_agent: None,
+      email: "lifecycle@example.com".into(),
+      password: "SecurePass123".into(),
+    })
+    .await;
+  assert!(matches!(
+    login_result.unwrap_err(),
+    AuthError::EmailNotVerified(_)
+  ));
+
+  // 3. Send email verification
+  let verification_token = auth
+    .send_email_verification(SendEmailVerification {
+      user_id: user.id.clone(),
+    })
+    .await
+    .unwrap();
+
+  // 4. Verify email
+  let verified_user = auth
+    .verify_email(VerifyEmail {
+      token: verification_token.token,
+    })
+    .await
+    .unwrap();
+  assert!(verified_user.email_verified);
+
+  // 5. Now login succeeds
+  let session = auth
+    .login(Login {
+      ip_address: None,
+      user_agent: None,
+      email: "lifecycle@example.com".into(),
+      password: "SecurePass123".into(),
+    })
+    .await
+    .unwrap();
+
+  // 6. Verify session
+  let session_user = auth.verify(Verify::new(&session.token)).await.unwrap();
+  assert_eq!(session_user.id, user.id);
+  assert!(session_user.email_verified);
+
+  // 7. Logout
+  auth.logout(Logout::new(&session.token)).await.unwrap();
+
+  // 8. Verify session is invalid
   assert!(auth.verify(Verify::new(&session.token)).await.is_err());
 }
 
@@ -317,6 +540,7 @@ async fn test_multiple_sessions_same_user() {
   // Register user
   auth
     .register(Register {
+      name: None,
       email: "multi@example.com".into(),
       password: "SecurePass123".into(),
     })
@@ -326,6 +550,8 @@ async fn test_multiple_sessions_same_user() {
   // Create multiple sessions
   let session1 = auth
     .login(Login {
+      ip_address: None,
+      user_agent: None,
       email: "multi@example.com".into(),
       password: "SecurePass123".into(),
     })
@@ -334,6 +560,8 @@ async fn test_multiple_sessions_same_user() {
 
   let session2 = auth
     .login(Login {
+      ip_address: None,
+      user_agent: None,
       email: "multi@example.com".into(),
       password: "SecurePass123".into(),
     })
@@ -362,6 +590,7 @@ async fn test_auth_is_clonable() {
   // Register with original
   auth
     .register(Register {
+      name: None,
       email: "clone@example.com".into(),
       password: "SecurePass123".into(),
     })
@@ -371,6 +600,8 @@ async fn test_auth_is_clonable() {
   // Login with clone
   let session = auth_clone
     .login(Login {
+      ip_address: None,
+      user_agent: None,
       email: "clone@example.com".into(),
       password: "SecurePass123".into(),
     })
@@ -394,6 +625,7 @@ async fn test_register_multiple_users() {
   for (email, password) in users {
     let result = auth
       .register(Register {
+        name: None,
         email: email.into(),
         password: password.into(),
       })
@@ -408,6 +640,7 @@ async fn test_verify_from_string() {
 
   auth
     .register(Register {
+      name: None,
       email: "test@example.com".into(),
       password: "SecurePass123".into(),
     })
@@ -416,6 +649,8 @@ async fn test_verify_from_string() {
 
   let session = auth
     .login(Login {
+      ip_address: None,
+      user_agent: None,
       email: "test@example.com".into(),
       password: "SecurePass123".into(),
     })
@@ -433,6 +668,7 @@ async fn test_logout_from_string() {
 
   auth
     .register(Register {
+      name: None,
       email: "test@example.com".into(),
       password: "SecurePass123".into(),
     })
@@ -441,6 +677,8 @@ async fn test_logout_from_string() {
 
   let session = auth
     .login(Login {
+      ip_address: None,
+      user_agent: None,
       email: "test@example.com".into(),
       password: "SecurePass123".into(),
     })
@@ -458,6 +696,7 @@ async fn test_password_case_sensitivity() {
 
   auth
     .register(Register {
+      name: None,
       email: "case@example.com".into(),
       password: "SecurePass123".into(),
     })
@@ -467,6 +706,8 @@ async fn test_password_case_sensitivity() {
   // Try to login with different case
   let result = auth
     .login(Login {
+      ip_address: None,
+      user_agent: None,
       email: "case@example.com".into(),
       password: "securepass123".into(),
     })
@@ -483,6 +724,7 @@ async fn test_email_case_handling() {
   // Register with lowercase
   auth
     .register(Register {
+      name: None,
       email: "test@example.com".into(),
       password: "SecurePass123".into(),
     })
@@ -490,14 +732,39 @@ async fn test_email_case_handling() {
     .unwrap();
 
   // Try to login with uppercase
+  // Note: This tests that email handling is case-sensitive in the database
   let result = auth
     .login(Login {
+      ip_address: None,
+      user_agent: None,
       email: "TEST@EXAMPLE.COM".into(),
       password: "SecurePass123".into(),
     })
     .await;
 
   // This behavior depends on database collation
-  // The test documents current behavior
+  // The test documents current behavior (case-sensitive)
   assert!(result.is_err());
+}
+
+#[tokio::test]
+async fn test_default_config_values() {
+  let auth = setup_test_auth().await.unwrap();
+
+  // By default, email verification is NOT required
+  assert!(!auth.requires_email_verification());
+
+  // By default, verification emails are NOT sent on registration
+  assert!(!auth.sends_verification_on_register());
+
+  // By default, no email sender is configured
+  assert!(!auth.has_email_sender());
+}
+
+#[tokio::test]
+async fn test_require_email_verification_config() {
+  let auth = setup_test_auth_with_email_verification().await.unwrap();
+
+  // This auth requires email verification
+  assert!(auth.requires_email_verification());
 }
