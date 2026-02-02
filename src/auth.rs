@@ -86,9 +86,6 @@ impl Auth {
   ) -> Result<VerificationToken> {
     crate::operations::email_verification::resend_email_verification(self, request).await
   }
-  pub async fn migrate(&self) -> Result<()> {
-    self.inner.db.migrate().await
-  }
 
   /// Check if an email sender is configured
   pub fn has_email_sender(&self) -> bool {

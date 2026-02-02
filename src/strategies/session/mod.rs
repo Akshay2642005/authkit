@@ -14,9 +14,12 @@ pub(crate) trait SessionStrategy: Send + Sync {
   async fn create_session(
     &self,
     db: &dyn DatabaseTrait,
+    id: &str,
     token: &str,
     user_id: &str,
     expires_at: i64,
+    ip_address: Option<&str>,
+    user_agent: Option<&str>,
   ) -> Result<()>;
 
   /// Find a session by token

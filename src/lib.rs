@@ -22,7 +22,7 @@ pub use error::{AuthError, Result};
 pub use operations::{
   Login, Logout, Register, ResendEmailVerification, SendEmailVerification, Verify, VerifyEmail,
 };
-pub use types::{Database, Session, User, VerificationToken};
+pub use types::{Account, Database, Session, User, VerificationToken};
 
 // Email queue exports (only available with email-queue feature)
 #[cfg(feature = "email-queue")]

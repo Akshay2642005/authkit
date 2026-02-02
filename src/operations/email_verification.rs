@@ -35,15 +35,19 @@ pub struct ResendEmailVerification {
 /// send an email to the user.
 ///
 /// The token expires in 24 hours by default.
+///
+/// **Requires:** email_verification feature columns in the database schema.
+/// Run `authkit migrate` with email_verification feature enabled.
 pub(crate) async fn send_email_verification(
   auth: &Auth,
   request: SendEmailVerification,
 ) -> Result<VerificationToken> {
-  // Find the user by ID
+  // Find the user by ID with email verification status
+  // Uses _with_verification method that queries email_verified columns
   let user = auth
     .inner
     .db
-    .find_user_by_id(&request.user_id)
+    .find_user_by_id_with_verification(&request.user_id)
     .await?
     .ok_or(AuthError::UserNotFound)?;
 
@@ -62,6 +66,7 @@ pub(crate) async fn send_email_verification(
     .generate_token(
       auth.inner.db.as_ref().as_ref(),
       &request.user_id,
+      &user.email,
       TokenType::EmailVerification,
       TWENTY_FOUR_HOURS,
     )
@@ -82,7 +87,7 @@ pub(crate) async fn send_email_verification(
         Ok(()) => {
           return Ok(VerificationToken {
             token: token.token,
-            email: user.email,
+            identifier: user.email,
             expires_at: token.expires_at,
           });
         }
@@ -107,7 +112,7 @@ pub(crate) async fn send_email_verification(
 
   Ok(VerificationToken {
     token: token.token,
-    email: user.email,
+    identifier: user.email,
     expires_at: token.expires_at,
   })
 }
@@ -116,6 +121,9 @@ pub(crate) async fn send_email_verification(
 ///
 /// This verifies the provided token and marks the user's email as verified
 /// if the token is valid, not expired, and not already used.
+///
+/// **Requires:** email_verification feature columns in the database schema.
+/// Run `authkit migrate` with email_verification feature enabled.
 pub(crate) async fn verify_email(auth: &Auth, request: VerifyEmail) -> Result<User> {
   // Verify the token
   let verified_token = auth
@@ -128,11 +136,19 @@ pub(crate) async fn verify_email(auth: &Auth, request: VerifyEmail) -> Result<Us
     )
     .await?;
 
-  // Get the user
+  // Get the user ID from the token
+  let user_id = verified_token
+    .user_id
+    .as_ref()
+    .ok_or(AuthError::InvalidToken(
+      "Token does not have an associated user".to_string(),
+    ))?;
+
+  // Get the user with email verification status
   let user = auth
     .inner
     .db
-    .find_user_by_id(&verified_token.user_id)
+    .find_user_by_id_with_verification(user_id)
     .await?
     .ok_or(AuthError::UserNotFound)?;
 
@@ -156,17 +172,13 @@ pub(crate) async fn verify_email(auth: &Auth, request: VerifyEmail) -> Result<Us
     .unwrap()
     .as_secs() as i64;
 
-  auth
-    .inner
-    .db
-    .update_email_verified(&verified_token.user_id, now)
-    .await?;
+  auth.inner.db.update_email_verified(user_id, now).await?;
 
-  // Return updated user
+  // Return updated user with verification status
   let updated_user = auth
     .inner
     .db
-    .find_user_by_id(&verified_token.user_id)
+    .find_user_by_id_with_verification(user_id)
     .await?
     .ok_or(AuthError::UserNotFound)?;
 
@@ -177,20 +189,24 @@ pub(crate) async fn verify_email(auth: &Auth, request: VerifyEmail) -> Result<Us
 ///
 /// This finds the user by email and generates a new verification token
 /// if the email is not already verified.
+///
+/// **Requires:** email_verification feature columns in the database schema.
+/// Run `authkit migrate` with email_verification feature enabled.
 pub(crate) async fn resend_email_verification(
   auth: &Auth,
   request: ResendEmailVerification,
 ) -> Result<VerificationToken> {
-  // Find the user by email
+  // Find the user by email with email verification status
   let db_user = auth
     .inner
     .db
-    .find_user_by_email(&request.email)
+    .find_user_by_email_with_verification(&request.email)
     .await?
     .ok_or(AuthError::UserNotFound)?;
 
   // Check if email is already verified
-  if db_user.email_verified {
+  let email_verified = db_user.email_verified.unwrap_or(false);
+  if email_verified {
     return Err(AuthError::EmailAlreadyVerified(
       "Email is already verified".to_string(),
     ));
@@ -204,6 +220,7 @@ pub(crate) async fn resend_email_verification(
     .generate_token(
       auth.inner.db.as_ref().as_ref(),
       &db_user.id,
+      &db_user.email,
       TokenType::EmailVerification,
       TWENTY_FOUR_HOURS,
     )
@@ -224,7 +241,7 @@ pub(crate) async fn resend_email_verification(
         Ok(()) => {
           return Ok(VerificationToken {
             token: token.token,
-            email: db_user.email,
+            identifier: db_user.email,
             expires_at: token.expires_at,
           });
         }
@@ -249,7 +266,7 @@ pub(crate) async fn resend_email_verification(
 
   Ok(VerificationToken {
     token: token.token,
-    email: db_user.email,
+    identifier: db_user.email,
     expires_at: token.expires_at,
   })
 }

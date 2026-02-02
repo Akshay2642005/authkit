@@ -6,8 +6,12 @@
 //! ```sh
 //! cargo run --example email_verification --features sqlite
 //! ```
+//!
+//! **Note:** In production, run `authkit migrate --db-url <URL>` to set up the database schema.
+//! This example uses inline SQL for demonstration with in-memory SQLite.
 
 use authkit::prelude::*;
+use sqlx::Executor;
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -15,12 +19,12 @@ async fn main() -> Result<()> {
 
   // 1. Initialize AuthKit with SQLite
   println!("1. Initializing AuthKit...");
-  let auth = Auth::builder()
-    .database(Database::sqlite(":memory:").await?)
-    .build()?;
+  let db = Database::sqlite(":memory:").await?;
 
-  // Run migrations
-  auth.migrate().await?;
+  // Set up schema inline for demo (in production, use: authkit migrate --db-url <URL>)
+  setup_demo_schema(&db).await?;
+
+  let auth = Auth::builder().database(db).build()?;
   println!("   ✓ Database initialized\n");
 
   // 2. Register a new user
@@ -184,6 +188,84 @@ async fn main() -> Result<()> {
   println!("• Tokens can be resent if users don't receive the email");
   println!("• Once verified, users cannot be sent new verification tokens");
   println!("• Application is responsible for sending emails (AuthKit only generates tokens)");
+
+  Ok(())
+}
+
+/// Set up database schema for this demo
+/// In production, use the CLI: `authkit migrate --db-url <URL>`
+async fn setup_demo_schema(db: &Database) -> Result<()> {
+  let pool = match &db.inner {
+    authkit::types::DatabaseInner::Sqlite(sqlite_db) => &sqlite_db.pool,
+    #[allow(unreachable_patterns)]
+    _ => panic!("This example requires SQLite"),
+  };
+
+  pool
+    .execute(
+      r#"
+      CREATE TABLE IF NOT EXISTS users (
+        id TEXT PRIMARY KEY,
+        email TEXT NOT NULL UNIQUE,
+        name TEXT,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL,
+        email_verified INTEGER NOT NULL DEFAULT 0,
+        email_verified_at INTEGER
+      )
+      "#,
+    )
+    .await?;
+
+  pool
+    .execute(
+      r#"
+      CREATE TABLE IF NOT EXISTS accounts (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        provider TEXT NOT NULL,
+        provider_account_id TEXT NOT NULL,
+        password_hash TEXT,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL,
+        UNIQUE(provider, provider_account_id)
+      )
+      "#,
+    )
+    .await?;
+
+  pool
+    .execute(
+      r#"
+      CREATE TABLE IF NOT EXISTS sessions (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        token TEXT NOT NULL UNIQUE,
+        expires_at INTEGER NOT NULL,
+        created_at INTEGER NOT NULL,
+        ip_address TEXT,
+        user_agent TEXT
+      )
+      "#,
+    )
+    .await?;
+
+  pool
+    .execute(
+      r#"
+      CREATE TABLE IF NOT EXISTS verification (
+        id TEXT PRIMARY KEY,
+        user_id TEXT REFERENCES users(id) ON DELETE CASCADE,
+        identifier TEXT NOT NULL,
+        token_hash TEXT NOT NULL UNIQUE,
+        token_type TEXT NOT NULL,
+        expires_at INTEGER NOT NULL,
+        created_at INTEGER NOT NULL,
+        used_at INTEGER
+      )
+      "#,
+    )
+    .await?;
 
   Ok(())
 }

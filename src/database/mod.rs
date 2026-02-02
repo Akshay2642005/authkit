@@ -7,21 +7,16 @@ pub mod sqlite;
 use crate::error::Result;
 use crate::types::{DatabaseInner, User};
 use async_trait::async_trait;
-use models::{DbSession, DbToken, DbUser};
+use models::{DbAccount, DbSession, DbUser, DbUserWithAccount, DbVerification};
 
 /// Core database trait for AuthKit
 ///
 /// This trait abstracts database operations across different backends (SQLite, Postgres).
-/// Methods are organized by feature area for easier maintenance and extension.
+/// The schema follows the feature-based approach:
+/// - Base (email_password): users, accounts, sessions, verification tables
+/// - Email verification: adds email_verified columns to users
 #[async_trait]
 pub(crate) trait DatabaseTrait: Send + Sync {
-  // ==========================================
-  // Schema Management
-  // ==========================================
-
-  /// Run database migrations to set up or update schema
-  async fn migrate(&self) -> Result<()>;
-
   // ==========================================
   // User Operations
   // ==========================================
@@ -32,24 +27,83 @@ pub(crate) trait DatabaseTrait: Send + Sync {
   /// Find a user by their unique ID
   async fn find_user_by_id(&self, id: &str) -> Result<Option<User>>;
 
-  /// Create a new user with the given credentials
+  /// Create a new user
   async fn create_user(
     &self,
     id: &str,
     email: &str,
-    password_hash: &str,
+    name: Option<&str>,
     created_at: i64,
   ) -> Result<User>;
 
+  // ==========================================
+  // Email Verification Operations
+  // (Requires email_verification feature migration)
+  // ==========================================
+
   /// Update a user's email verification status
+  /// Requires: email_verification feature columns (email_verified, email_verified_at)
   async fn update_email_verified(&self, user_id: &str, verified_at: i64) -> Result<()>;
+
+  /// Find a user by ID with email verification status
+  /// Requires: email_verification feature columns (email_verified, email_verified_at)
+  async fn find_user_by_id_with_verification(&self, id: &str) -> Result<Option<User>>;
+
+  /// Find a user by email with email verification status
+  /// Requires: email_verification feature columns (email_verified, email_verified_at)
+  async fn find_user_by_email_with_verification(&self, email: &str) -> Result<Option<DbUser>>;
+
+  // ==========================================
+  // Account Operations
+  // ==========================================
+
+  /// Create an account (links a provider to a user)
+  #[allow(dead_code)]
+  async fn create_account(
+    &self,
+    id: &str,
+    user_id: &str,
+    provider: &str,
+    provider_account_id: &str,
+    password_hash: Option<&str>,
+    created_at: i64,
+  ) -> Result<()>;
+
+  /// Find an account by provider and provider account ID
+  #[allow(dead_code)]
+  async fn find_account_by_provider(
+    &self,
+    provider: &str,
+    provider_account_id: &str,
+  ) -> Result<Option<DbAccount>>;
+
+  /// Find user with their credential account (for email/password login)
+  async fn find_user_with_credential_account(
+    &self,
+    email: &str,
+  ) -> Result<Option<DbUserWithAccount>>;
+
+  /// Find user with their credential account including email verification status
+  /// Requires: email_verification feature columns (email_verified, email_verified_at)
+  async fn find_user_with_credential_account_with_verification(
+    &self,
+    email: &str,
+  ) -> Result<Option<DbUserWithAccount>>;
 
   // ==========================================
   // Session Operations
   // ==========================================
 
   /// Create a new session for a user
-  async fn create_session(&self, token: &str, user_id: &str, expires_at: i64) -> Result<()>;
+  async fn create_session(
+    &self,
+    id: &str,
+    token: &str,
+    user_id: &str,
+    expires_at: i64,
+    ip_address: Option<&str>,
+    user_agent: Option<&str>,
+  ) -> Result<()>;
 
   /// Find a session by its token
   async fn find_session(&self, token: &str) -> Result<Option<DbSession>>;
@@ -62,36 +116,41 @@ pub(crate) trait DatabaseTrait: Send + Sync {
   async fn delete_expired_sessions(&self) -> Result<u64>;
 
   // ==========================================
-  // Token Operations (Email Verification, Password Reset, etc.)
+  // Verification Token Operations
   // ==========================================
 
-  /// Create a new token (email verification, password reset, magic link, etc.)
+  /// Create a new verification token
   #[allow(dead_code)]
-  async fn create_token(
+  async fn create_verification(
     &self,
     id: &str,
-    user_id: &str,
+    user_id: Option<&str>,
+    identifier: &str,
     token_hash: &str,
     token_type: &str,
     expires_at: i64,
     created_at: i64,
   ) -> Result<()>;
 
-  /// Find a token by its hash and type
+  /// Find a verification token by its hash and type
   #[allow(dead_code)]
-  async fn find_token(&self, token_hash: &str, token_type: &str) -> Result<Option<DbToken>>;
+  async fn find_verification(
+    &self,
+    token_hash: &str,
+    token_type: &str,
+  ) -> Result<Option<DbVerification>>;
 
-  /// Mark a token as used
+  /// Mark a verification token as used
   #[allow(dead_code)]
-  async fn mark_token_used(&self, token_hash: &str, used_at: i64) -> Result<()>;
+  async fn mark_verification_used(&self, token_hash: &str, used_at: i64) -> Result<()>;
 
-  /// Delete a specific token by its hash
+  /// Delete a specific verification token by its hash
   #[allow(dead_code)]
-  async fn delete_token(&self, token_hash: &str) -> Result<()>;
+  async fn delete_verification(&self, token_hash: &str) -> Result<()>;
 
-  /// Delete all expired tokens (cleanup utility)
+  /// Delete all expired verification tokens (cleanup utility)
   #[allow(dead_code)]
-  async fn delete_expired_tokens(&self) -> Result<u64>;
+  async fn delete_expired_verifications(&self) -> Result<u64>;
 }
 
 pub(crate) fn create_database_trait(inner: DatabaseInner) -> Box<dyn DatabaseTrait> {

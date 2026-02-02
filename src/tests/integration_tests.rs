@@ -9,6 +9,7 @@
 //! - Error scenarios
 
 use crate::prelude::*;
+use crate::tests::test_helpers::setup_test_schema;
 use crate::types::Database;
 
 /// Helper function to set up a test Auth instance with in-memory database
@@ -24,10 +25,10 @@ pub(crate) async fn setup_test_auth() -> Result<Auth> {
     let db_name = ":memory:".to_string();
     let db = Database::sqlite(&db_name).await?;
 
-    let auth = Auth::builder().database(db).build()?;
+    // Set up schema for testing (includes email_verification columns)
+    setup_test_schema(&db).await?;
 
-    // Run migrations
-    auth.migrate().await?;
+    let auth = Auth::builder().database(db).build()?;
 
     Ok(auth)
   }
@@ -40,10 +41,10 @@ pub(crate) async fn setup_test_auth() -> Result<Auth> {
       .unwrap_or_else(|_| "postgres://postgres:postgres@localhost/authkit_test".to_string());
     let db = Database::postgres(&db_url).await?;
 
-    let auth = Auth::builder().database(db).build()?;
+    // Set up schema for testing (includes email_verification columns)
+    setup_test_schema(&db).await?;
 
-    // Run migrations
-    auth.migrate().await?;
+    let auth = Auth::builder().database(db).build()?;
 
     Ok(auth)
   }
@@ -59,12 +60,13 @@ pub(crate) async fn setup_test_auth_with_email_verification() -> Result<Auth> {
     let db_name = ":memory:".to_string();
     let db = Database::sqlite(&db_name).await?;
 
+    // Set up schema for testing (includes email_verification columns)
+    setup_test_schema(&db).await?;
+
     let auth = Auth::builder()
       .database(db)
       .require_email_verification(true)
       .build()?;
-
-    auth.migrate().await?;
 
     Ok(auth)
   }
@@ -75,12 +77,13 @@ pub(crate) async fn setup_test_auth_with_email_verification() -> Result<Auth> {
       .unwrap_or_else(|_| "postgres://postgres:postgres@localhost/authkit_test".to_string());
     let db = Database::postgres(&db_url).await?;
 
+    // Set up schema for testing (includes email_verification columns)
+    setup_test_schema(&db).await?;
+
     let auth = Auth::builder()
       .database(db)
       .require_email_verification(true)
       .build()?;
-
-    auth.migrate().await?;
 
     Ok(auth)
   }
@@ -96,6 +99,7 @@ pub(crate) async fn register_and_verify_user(
   // Register user
   let user = auth
     .register(Register {
+      name: None,
       email: email.into(),
       password: password.into(),
     })
@@ -122,6 +126,7 @@ async fn test_register_user_success() {
 
   let result = auth
     .register(Register {
+      name: None,
       email: "test@example.com".into(),
       password: "SecurePass123".into(),
     })
@@ -141,6 +146,7 @@ async fn test_register_duplicate_email() {
   // Register first user
   auth
     .register(Register {
+      name: None,
       email: "duplicate@example.com".into(),
       password: "SecurePass123".into(),
     })
@@ -150,6 +156,7 @@ async fn test_register_duplicate_email() {
   // Try to register with same email
   let result = auth
     .register(Register {
+      name: None,
       email: "duplicate@example.com".into(),
       password: "AnotherPass123".into(),
     })
@@ -168,6 +175,7 @@ async fn test_register_invalid_email() {
 
   let result = auth
     .register(Register {
+      name: None,
       email: "not-an-email".into(),
       password: "SecurePass123".into(),
     })
@@ -183,6 +191,7 @@ async fn test_register_weak_password() {
 
   let result = auth
     .register(Register {
+      name: None,
       email: "test@example.com".into(),
       password: "weak".into(),
     })
@@ -199,6 +208,7 @@ async fn test_login_success() {
   // Register user (no email verification required by default)
   let user = auth
     .register(Register {
+      name: None,
       email: "login@example.com".into(),
       password: "SecurePass123".into(),
     })
@@ -208,6 +218,8 @@ async fn test_login_success() {
   // Login should succeed without email verification
   let result = auth
     .login(Login {
+      ip_address: None,
+      user_agent: None,
       email: "login@example.com".into(),
       password: "SecurePass123".into(),
     })
@@ -228,6 +240,7 @@ async fn test_login_requires_email_verification_when_configured() {
   // Register user but don't verify email
   auth
     .register(Register {
+      name: None,
       email: "unverified@example.com".into(),
       password: "SecurePass123".into(),
     })
@@ -237,6 +250,8 @@ async fn test_login_requires_email_verification_when_configured() {
   // Try to login without email verification - should fail
   let result = auth
     .login(Login {
+      ip_address: None,
+      user_agent: None,
       email: "unverified@example.com".into(),
       password: "SecurePass123".into(),
     })
@@ -262,6 +277,8 @@ async fn test_login_succeeds_after_verification_when_required() {
   // Login should succeed after verification
   let result = auth
     .login(Login {
+      ip_address: None,
+      user_agent: None,
       email: "verified@example.com".into(),
       password: "SecurePass123".into(),
     })
@@ -279,6 +296,7 @@ async fn test_login_wrong_password() {
   // Register user
   auth
     .register(Register {
+      name: None,
       email: "test@example.com".into(),
       password: "SecurePass123".into(),
     })
@@ -288,6 +306,8 @@ async fn test_login_wrong_password() {
   // Try to login with wrong password
   let result = auth
     .login(Login {
+      ip_address: None,
+      user_agent: None,
       email: "test@example.com".into(),
       password: "WrongPass123".into(),
     })
@@ -303,6 +323,8 @@ async fn test_login_nonexistent_user() {
 
   let result = auth
     .login(Login {
+      ip_address: None,
+      user_agent: None,
       email: "nonexistent@example.com".into(),
       password: "SecurePass123".into(),
     })
@@ -319,6 +341,7 @@ async fn test_verify_session_success() {
   // Register and login
   let user = auth
     .register(Register {
+      name: None,
       email: "verify@example.com".into(),
       password: "SecurePass123".into(),
     })
@@ -327,6 +350,8 @@ async fn test_verify_session_success() {
 
   let session = auth
     .login(Login {
+      ip_address: None,
+      user_agent: None,
       email: "verify@example.com".into(),
       password: "SecurePass123".into(),
     })
@@ -359,6 +384,7 @@ async fn test_logout_success() {
   // Register and login
   auth
     .register(Register {
+      name: None,
       email: "logout@example.com".into(),
       password: "SecurePass123".into(),
     })
@@ -367,6 +393,8 @@ async fn test_logout_success() {
 
   let session = auth
     .login(Login {
+      ip_address: None,
+      user_agent: None,
       email: "logout@example.com".into(),
       password: "SecurePass123".into(),
     })
@@ -405,6 +433,7 @@ async fn test_full_auth_lifecycle() {
   // 1. Register
   let user = auth
     .register(Register {
+      name: None,
       email: "lifecycle@example.com".into(),
       password: "SecurePass123".into(),
     })
@@ -414,6 +443,8 @@ async fn test_full_auth_lifecycle() {
   // 2. Login (works without verification by default)
   let session = auth
     .login(Login {
+      ip_address: None,
+      user_agent: None,
       email: "lifecycle@example.com".into(),
       password: "SecurePass123".into(),
     })
@@ -439,6 +470,7 @@ async fn test_full_auth_lifecycle_with_email_verification() {
   // 1. Register
   let user = auth
     .register(Register {
+      name: None,
       email: "lifecycle@example.com".into(),
       password: "SecurePass123".into(),
     })
@@ -450,6 +482,8 @@ async fn test_full_auth_lifecycle_with_email_verification() {
   // 2. Cannot login without verification
   let login_result = auth
     .login(Login {
+      ip_address: None,
+      user_agent: None,
       email: "lifecycle@example.com".into(),
       password: "SecurePass123".into(),
     })
@@ -479,6 +513,8 @@ async fn test_full_auth_lifecycle_with_email_verification() {
   // 5. Now login succeeds
   let session = auth
     .login(Login {
+      ip_address: None,
+      user_agent: None,
       email: "lifecycle@example.com".into(),
       password: "SecurePass123".into(),
     })
@@ -504,6 +540,7 @@ async fn test_multiple_sessions_same_user() {
   // Register user
   auth
     .register(Register {
+      name: None,
       email: "multi@example.com".into(),
       password: "SecurePass123".into(),
     })
@@ -513,6 +550,8 @@ async fn test_multiple_sessions_same_user() {
   // Create multiple sessions
   let session1 = auth
     .login(Login {
+      ip_address: None,
+      user_agent: None,
       email: "multi@example.com".into(),
       password: "SecurePass123".into(),
     })
@@ -521,6 +560,8 @@ async fn test_multiple_sessions_same_user() {
 
   let session2 = auth
     .login(Login {
+      ip_address: None,
+      user_agent: None,
       email: "multi@example.com".into(),
       password: "SecurePass123".into(),
     })
@@ -549,6 +590,7 @@ async fn test_auth_is_clonable() {
   // Register with original
   auth
     .register(Register {
+      name: None,
       email: "clone@example.com".into(),
       password: "SecurePass123".into(),
     })
@@ -558,6 +600,8 @@ async fn test_auth_is_clonable() {
   // Login with clone
   let session = auth_clone
     .login(Login {
+      ip_address: None,
+      user_agent: None,
       email: "clone@example.com".into(),
       password: "SecurePass123".into(),
     })
@@ -581,6 +625,7 @@ async fn test_register_multiple_users() {
   for (email, password) in users {
     let result = auth
       .register(Register {
+        name: None,
         email: email.into(),
         password: password.into(),
       })
@@ -595,6 +640,7 @@ async fn test_verify_from_string() {
 
   auth
     .register(Register {
+      name: None,
       email: "test@example.com".into(),
       password: "SecurePass123".into(),
     })
@@ -603,6 +649,8 @@ async fn test_verify_from_string() {
 
   let session = auth
     .login(Login {
+      ip_address: None,
+      user_agent: None,
       email: "test@example.com".into(),
       password: "SecurePass123".into(),
     })
@@ -620,6 +668,7 @@ async fn test_logout_from_string() {
 
   auth
     .register(Register {
+      name: None,
       email: "test@example.com".into(),
       password: "SecurePass123".into(),
     })
@@ -628,6 +677,8 @@ async fn test_logout_from_string() {
 
   let session = auth
     .login(Login {
+      ip_address: None,
+      user_agent: None,
       email: "test@example.com".into(),
       password: "SecurePass123".into(),
     })
@@ -645,6 +696,7 @@ async fn test_password_case_sensitivity() {
 
   auth
     .register(Register {
+      name: None,
       email: "case@example.com".into(),
       password: "SecurePass123".into(),
     })
@@ -654,6 +706,8 @@ async fn test_password_case_sensitivity() {
   // Try to login with different case
   let result = auth
     .login(Login {
+      ip_address: None,
+      user_agent: None,
       email: "case@example.com".into(),
       password: "securepass123".into(),
     })
@@ -670,6 +724,7 @@ async fn test_email_case_handling() {
   // Register with lowercase
   auth
     .register(Register {
+      name: None,
       email: "test@example.com".into(),
       password: "SecurePass123".into(),
     })
@@ -680,6 +735,8 @@ async fn test_email_case_handling() {
   // Note: This tests that email handling is case-sensitive in the database
   let result = auth
     .login(Login {
+      ip_address: None,
+      user_agent: None,
       email: "TEST@EXAMPLE.COM".into(),
       password: "SecurePass123".into(),
     })

@@ -12,6 +12,7 @@ use crate::email_job::EmailJob;
 pub struct Register {
   pub email: String,
   pub password: String,
+  pub name: Option<String>,
 }
 
 pub(crate) async fn execute(auth: &Auth, request: Register) -> Result<User> {
@@ -19,9 +20,12 @@ pub(crate) async fn execute(auth: &Auth, request: Register) -> Result<User> {
 
   validation::password::validate(&request.password)?;
 
+  // Check if user already exists
   if let Some(_existing) = auth.inner.db.find_user_by_email(&request.email).await? {
     return Err(AuthError::UserAlreadyExists(request.email));
   }
+
+  // Hash the password
   let password_hash = auth
     .inner
     .password_strategy
@@ -29,16 +33,37 @@ pub(crate) async fn execute(auth: &Auth, request: Register) -> Result<User> {
     .await?;
 
   let user_id = crate::security::tokens::generate_id();
+  let account_id = crate::security::tokens::generate_id();
 
   let created_at = std::time::SystemTime::now()
     .duration_since(std::time::UNIX_EPOCH)
     .unwrap()
     .as_secs() as i64;
 
+  // Create the user
   let user = auth
     .inner
     .db
-    .create_user(&user_id, &request.email, &password_hash, created_at)
+    .create_user(
+      &user_id,
+      &request.email,
+      request.name.as_deref(),
+      created_at,
+    )
+    .await?;
+
+  // Create the credential account (links user to email/password provider)
+  auth
+    .inner
+    .db
+    .create_account(
+      &account_id,
+      &user_id,
+      "credential",   // provider type for email/password
+      &request.email, // provider_account_id is the email for credentials
+      Some(&password_hash),
+      created_at,
+    )
     .await?;
 
   // Check if we should send verification email on registration
@@ -61,6 +86,7 @@ pub(crate) async fn execute(auth: &Auth, request: Register) -> Result<User> {
     .generate_token(
       auth.inner.db.as_ref().as_ref(),
       &user_id,
+      &request.email,
       TokenType::EmailVerification,
       TWENTY_FOUR_HOURS,
     )

@@ -11,7 +11,7 @@ mod tests {
 
     // Register a user first
     let user = auth
-      .register(Register {
+      .register(Register { name: None,
         email: "test@example.com".to_string(),
         password: "SecurePass123!".to_string(),
       })
@@ -28,7 +28,7 @@ mod tests {
       .await
       .unwrap();
 
-    assert_eq!(verification.email, "test@example.com");
+    assert_eq!(verification.identifier, "test@example.com");
     assert!(!verification.token.is_empty());
     assert!(verification.expires_at > 0);
   }
@@ -53,7 +53,7 @@ mod tests {
 
     // Register a user
     let user = auth
-      .register(Register {
+      .register(Register { name: None,
         email: "test@example.com".to_string(),
         password: "SecurePass123!".to_string(),
       })
@@ -95,7 +95,7 @@ mod tests {
 
     // Register a user
     let user = auth
-      .register(Register {
+      .register(Register { name: None,
         email: "test@example.com".to_string(),
         password: "SecurePass123!".to_string(),
       })
@@ -146,7 +146,7 @@ mod tests {
 
     // Register a user
     let user = auth
-      .register(Register {
+      .register(Register { name: None,
         email: "test@example.com".to_string(),
         password: "SecurePass123!".to_string(),
       })
@@ -189,7 +189,7 @@ mod tests {
 
     // Register a user
     let user = auth
-      .register(Register {
+      .register(Register { name: None,
         email: "test@example.com".to_string(),
         password: "SecurePass123!".to_string(),
       })
@@ -223,7 +223,7 @@ mod tests {
 
     // Register a user
     let user = auth
-      .register(Register {
+      .register(Register { name: None,
         email: "test@example.com".to_string(),
         password: "SecurePass123!".to_string(),
       })
@@ -246,7 +246,7 @@ mod tests {
       .await
       .unwrap();
 
-    assert_eq!(second_verification.email, "test@example.com");
+    assert_eq!(second_verification.identifier, "test@example.com");
     assert!(!second_verification.token.is_empty());
     assert_ne!(first_verification.token, second_verification.token);
   }
@@ -271,7 +271,7 @@ mod tests {
 
     // Register and verify a user
     let user = auth
-      .register(Register {
+      .register(Register { name: None,
         email: "test@example.com".to_string(),
         password: "SecurePass123!".to_string(),
       })
@@ -313,7 +313,7 @@ mod tests {
 
     // Register user (no email verification)
     auth
-      .register(Register {
+      .register(Register { name: None,
         email: "test@example.com".to_string(),
         password: "SecurePass123!".to_string(),
       })
@@ -322,7 +322,7 @@ mod tests {
 
     // Login should succeed without email verification
     let session = auth
-      .login(Login {
+      .login(Login { ip_address: None, user_agent: None,
         email: "test@example.com".to_string(),
         password: "SecurePass123!".to_string(),
       })
@@ -339,7 +339,7 @@ mod tests {
 
     // Register a user but don't verify email
     auth
-      .register(Register {
+      .register(Register { name: None,
         email: "unverified@example.com".to_string(),
         password: "SecurePass123!".to_string(),
       })
@@ -348,7 +348,7 @@ mod tests {
 
     // Attempt to login should fail with EmailNotVerified
     let result = auth
-      .login(Login {
+      .login(Login { ip_address: None, user_agent: None,
         email: "unverified@example.com".to_string(),
         password: "SecurePass123!".to_string(),
       })
@@ -373,7 +373,7 @@ mod tests {
 
     // Now login should succeed
     let session = auth
-      .login(Login {
+      .login(Login { ip_address: None, user_agent: None,
         email: "verified@example.com".to_string(),
         password: "SecurePass123!".to_string(),
       })
@@ -390,7 +390,7 @@ mod tests {
 
     // 1. Register a new user
     let user = auth
-      .register(Register {
+      .register(Register { name: None,
         email: "newuser@example.com".to_string(),
         password: "SecurePass123!".to_string(),
       })
@@ -402,7 +402,7 @@ mod tests {
 
     // 2. User CAN login without email verification (not required by default)
     let session = auth
-      .login(Login {
+      .login(Login { ip_address: None, user_agent: None,
         email: "newuser@example.com".to_string(),
         password: "SecurePass123!".to_string(),
       })
@@ -456,7 +456,7 @@ mod tests {
 
     // 1. Register a new user
     let user = auth
-      .register(Register {
+      .register(Register { name: None,
         email: "newuser@example.com".to_string(),
         password: "SecurePass123!".to_string(),
       })
@@ -468,7 +468,7 @@ mod tests {
 
     // 2. User CANNOT login without email verification
     let login_result = auth
-      .login(Login {
+      .login(Login { ip_address: None, user_agent: None,
         email: "newuser@example.com".to_string(),
         password: "SecurePass123!".to_string(),
       })
@@ -501,7 +501,7 @@ mod tests {
 
     // 5. Now user CAN login after email verification
     let session = auth
-      .login(Login {
+      .login(Login { ip_address: None, user_agent: None,
         email: "newuser@example.com".to_string(),
         password: "SecurePass123!".to_string(),
       })
@@ -536,7 +536,7 @@ mod tests {
 
     // Register multiple users
     let user1 = auth
-      .register(Register {
+      .register(Register { name: None,
         email: "user1@example.com".to_string(),
         password: "SecurePass123!".to_string(),
       })
@@ -544,7 +544,7 @@ mod tests {
       .unwrap();
 
     let user2 = auth
-      .register(Register {
+      .register(Register { name: None,
         email: "user2@example.com".to_string(),
         password: "SecurePass123!".to_string(),
       })
@@ -581,7 +581,7 @@ mod tests {
 
     // Both users can login (verification not required by default)
     let session1 = auth
-      .login(Login {
+      .login(Login { ip_address: None, user_agent: None,
         email: "user1@example.com".to_string(),
         password: "SecurePass123!".to_string(),
       })
@@ -589,7 +589,7 @@ mod tests {
       .unwrap();
 
     let session2 = auth
-      .login(Login {
+      .login(Login { ip_address: None, user_agent: None,
         email: "user2@example.com".to_string(),
         password: "SecurePass123!".to_string(),
       })
@@ -641,7 +641,7 @@ mod tests {
 
     // Register should succeed
     let user = auth
-      .register(Register {
+      .register(Register { name: None,
         email: "no-email-sender@example.com".to_string(),
         password: "SecurePass123!".to_string(),
       })

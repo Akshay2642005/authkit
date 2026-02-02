@@ -23,7 +23,7 @@ async fn test_empty_email() {
   let auth = setup_test_auth().await.unwrap();
 
   let result = auth
-    .register(Register {
+    .register(Register { name: None,
       email: "".into(),
       password: "SecurePass123".into(),
     })
@@ -38,7 +38,7 @@ async fn test_empty_password() {
   let auth = setup_test_auth().await.unwrap();
 
   let result = auth
-    .register(Register {
+    .register(Register { name: None,
       email: "test@example.com".into(),
       password: "".into(),
     })
@@ -53,7 +53,7 @@ async fn test_whitespace_only_email() {
   let auth = setup_test_auth().await.unwrap();
 
   let result = auth
-    .register(Register {
+    .register(Register { name: None,
       email: "   ".into(),
       password: "SecurePass123".into(),
     })
@@ -69,7 +69,7 @@ async fn test_whitespace_in_password() {
 
   // Password with spaces should still work if it meets requirements
   let result = auth
-    .register(Register {
+    .register(Register { name: None,
       email: "test@example.com".into(),
       password: "Secure Pass 123".into(),
     })
@@ -87,7 +87,7 @@ async fn test_very_long_email() {
   let email = format!("{}@example.com", long_local);
 
   let result = auth
-    .register(Register {
+    .register(Register { name: None,
       email,
       password: "SecurePass123".into(),
     })
@@ -112,7 +112,7 @@ async fn test_special_characters_in_email() {
 
   for email in valid_emails {
     let result = auth
-      .register(Register {
+      .register(Register { name: None,
         email: email.into(),
         password: "SecurePass123".into(),
       })
@@ -134,7 +134,7 @@ async fn test_sql_injection_in_email() {
 
   for email in malicious_emails {
     let result = auth
-      .register(Register {
+      .register(Register { name: None,
         email: email.into(),
         password: "SecurePass123".into(),
       })
@@ -147,7 +147,7 @@ async fn test_sql_injection_in_email() {
 
   // Verify the auth system still works
   let result = auth
-    .register(Register {
+    .register(Register { name: None,
       email: "safe@example.com".into(),
       password: "SecurePass123".into(),
     })
@@ -161,7 +161,7 @@ async fn test_sql_injection_in_password() {
 
   // Register with SQL injection attempt in password
   let result = auth
-    .register(Register {
+    .register(Register { name: None,
       email: "test@example.com".into(),
       password: "Password123'; DROP TABLE users; --".into(),
     })
@@ -172,7 +172,7 @@ async fn test_sql_injection_in_password() {
 
   // Login should work with the same "malicious" password
   let login_result = auth
-    .login(Login {
+    .login(Login { ip_address: None, user_agent: None,
       email: "test@example.com".into(),
       password: "Password123'; DROP TABLE users; --".into(),
     })
@@ -205,7 +205,7 @@ async fn test_double_logout() {
 
   // Register and login
   auth
-    .register(Register {
+    .register(Register { name: None,
       email: "double@example.com".into(),
       password: "SecurePass123".into(),
     })
@@ -213,7 +213,7 @@ async fn test_double_logout() {
     .unwrap();
 
   let session = auth
-    .login(Login {
+    .login(Login { ip_address: None, user_agent: None,
       email: "double@example.com".into(),
       password: "SecurePass123".into(),
     })
@@ -234,7 +234,7 @@ async fn test_verify_after_logout() {
 
   // Register and login
   auth
-    .register(Register {
+    .register(Register { name: None,
       email: "verify@example.com".into(),
       password: "SecurePass123".into(),
     })
@@ -242,7 +242,7 @@ async fn test_verify_after_logout() {
     .unwrap();
 
   let session = auth
-    .login(Login {
+    .login(Login { ip_address: None, user_agent: None,
       email: "verify@example.com".into(),
       password: "SecurePass123".into(),
     })
@@ -264,7 +264,7 @@ async fn test_concurrent_operations() {
 
   // Register user
   auth
-    .register(Register {
+    .register(Register { name: None,
       email: "concurrent@example.com".into(),
       password: "SecurePass123".into(),
     })
@@ -278,7 +278,7 @@ async fn test_concurrent_operations() {
 
   let handle1 = tokio::spawn(async move {
     auth1
-      .login(Login {
+      .login(Login { ip_address: None, user_agent: None,
         email: "concurrent@example.com".into(),
         password: "SecurePass123".into(),
       })
@@ -287,7 +287,7 @@ async fn test_concurrent_operations() {
 
   let handle2 = tokio::spawn(async move {
     auth2
-      .login(Login {
+      .login(Login { ip_address: None, user_agent: None,
         email: "concurrent@example.com".into(),
         password: "SecurePass123".into(),
       })
@@ -296,7 +296,7 @@ async fn test_concurrent_operations() {
 
   let handle3 = tokio::spawn(async move {
     auth3
-      .login(Login {
+      .login(Login { ip_address: None, user_agent: None,
         email: "concurrent@example.com".into(),
         password: "SecurePass123".into(),
       })
@@ -321,7 +321,7 @@ async fn test_password_with_null_bytes() {
   let password = "Pass\0word123";
 
   let result = auth
-    .register(Register {
+    .register(Register { name: None,
       email: "null@example.com".into(),
       password: password.into(),
     })
@@ -345,7 +345,7 @@ async fn test_unicode_in_password() {
   for (i, password) in passwords.iter().enumerate() {
     let email = format!("unicode{}@example.com", i);
     let result = auth
-      .register(Register {
+      .register(Register { name: None,
         email: email.clone(),
         password: password.to_string(),
       })
@@ -354,7 +354,7 @@ async fn test_unicode_in_password() {
     if result.is_ok() {
       // If registration succeeds, login should work
       let login_result = auth
-        .login(Login {
+        .login(Login { ip_address: None, user_agent: None,
           email: email.clone(),
           password: password.to_string(),
         })
@@ -380,7 +380,7 @@ async fn test_email_with_subdomains() {
 
   for email in emails {
     let result = auth
-      .register(Register {
+      .register(Register { name: None,
         email: email.into(),
         password: "SecurePass123".into(),
       })
@@ -406,7 +406,7 @@ async fn test_register_login_with_trimmed_spaces() {
 
   // Register with email that has leading/trailing spaces
   let result = auth
-    .register(Register {
+    .register(Register { name: None,
       email: "  test@example.com  ".into(),
       password: "SecurePass123".into(),
     })
@@ -452,7 +452,7 @@ async fn test_login_with_email_verification_required() {
 
   // Register user (no verification)
   auth
-    .register(Register {
+    .register(Register { name: None,
       email: "unverified@example.com".into(),
       password: "SecurePass123".into(),
     })
@@ -461,7 +461,7 @@ async fn test_login_with_email_verification_required() {
 
   // Login should fail with EmailNotVerified
   let result = auth
-    .login(Login {
+    .login(Login { ip_address: None, user_agent: None,
       email: "unverified@example.com".into(),
       password: "SecurePass123".into(),
     })

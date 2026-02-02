@@ -12,11 +12,15 @@ impl SessionStrategy for DatabaseSessionStrategy {
   async fn create_session(
     &self,
     db: &dyn DatabaseTrait,
+    id: &str,
     token: &str,
     user_id: &str,
     expires_at: i64,
+    ip_address: Option<&str>,
+    user_agent: Option<&str>,
   ) -> Result<()> {
-    db.create_session(token, user_id, expires_at).await
+    db.create_session(id, token, user_id, expires_at, ip_address, user_agent)
+      .await
   }
 
   async fn find_session(&self, db: &dyn DatabaseTrait, token: &str) -> Result<Option<DbSession>> {
